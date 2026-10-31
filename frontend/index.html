@@ -1,0 +1,55 @@
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f7f2" />
+    <title>AgriPilot</title>
+
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-width: 320px;
+        min-height: 100%;
+        background: #f4f7f2;
+        font-family: Arial, sans-serif;
+      }
+
+      #initial-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f4f7f2;
+        color: #173b25;
+        text-align: center;
+      }
+
+      #initial-loader h1 {
+        font-size: 24px;
+      }
+
+      #initial-loader p {
+        color: #647268;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="initial-loader">
+      <div>
+        <h1>AgriPilot</h1>
+    
+      </div>
+    </div>
+
+    <div id="root"></div>
+
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
