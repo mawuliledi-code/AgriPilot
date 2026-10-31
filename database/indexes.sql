@@ -151,8 +151,9 @@ WHERE farm_id = 50;
 
 
 
+-- =====================================================
 -- PERFORMANCE COMPARISON
-
+-- =====================================================
 -- Previously recorded test measurements:
 --
 -- Without index: 11.489 ms
