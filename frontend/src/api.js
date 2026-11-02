@@ -124,6 +124,32 @@ export async function getMyCrops(token) {
   return readResponse(response, "Could not load your crops");
 }
 
+
+export async function getFarmWeather(farmId, token) {
+  if (!token) {
+    throw new Error("Your session has expired. Please log in again.");
+  }
+
+  if (!farmId) {
+    throw new Error("Farm ID is required to load weather.");
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}/weather/${farmId}`,
+    {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    }
+  );
+
+  return readResponse(response, "Could not load farm weather");
+}
+
+
 // Register a new crop.
 export async function createCrop(token, cropData) {
   if (!token) {
