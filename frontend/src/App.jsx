@@ -552,14 +552,21 @@ function App() {
           {/* Sidebar navigation */}
           <nav className="sidebar-nav">
             <a
-              href="#overview"
-              className={`nav-link ${
-                activeSection === "overview" ? "active" : ""
-              }`}
-              onClick={() => setActiveSection("overview")}
-            >
-              <span>▦</span> Overview
-            </a>
+             href="#overview"
+            className={`nav-link ${
+              activeSection === "overview" ? "active" : ""
+            }`}
+            onClick={(event) => {
+              event.preventDefault();
+              setActiveSection("overview");
+              window.scrollTo({
+               top: 0,
+              behavior: "smooth",
+            });
+          }}
+        >
+          <span>▦</span> Overview
+        </a>
 
             <a
               href="#crop-management"
@@ -608,7 +615,7 @@ function App() {
           </div>
         </aside>
 
-        <div className="dashboard">
+        <div className="dashboard" id="overview">
           {/* Shared dashboard header */}
           <header className="dashboard-header">
             <div>
