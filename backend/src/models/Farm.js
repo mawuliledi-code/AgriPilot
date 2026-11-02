@@ -53,6 +53,19 @@ const farmSchema = new mongoose.Schema(
         trim: true,
       },
     ],
+
+    // Cache the most recently retrieved farm weather
+    weatherCache: {
+      data: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null,
+      },
+
+      fetchedAt: {
+        type: Date,
+        default: null,
+      },
+    },
   },
   {
     timestamps: true,

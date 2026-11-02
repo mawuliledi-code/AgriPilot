@@ -1,5 +1,6 @@
 
 const getWeather = async (latitude, longitude) => {
+  // Validate farm coordinates
   if (
     !Number.isFinite(latitude) ||
     !Number.isFinite(longitude) ||
@@ -11,6 +12,7 @@ const getWeather = async (latitude, longitude) => {
     throw new Error("Valid latitude and longitude are required");
   }
 
+  // Prepare Open-Meteo request
   const params = new URLSearchParams({
     latitude: String(latitude),
     longitude: String(longitude),
@@ -30,41 +32,95 @@ const getWeather = async (latitude, longitude) => {
 
   const url = `https://api.open-meteo.com/v1/forecast?${params}`;
 
-  const response = await fetch(url);
+  // Retry temporary weather service errors
+  const maxAttempts = 3;
+  const retryDelays = [1000, 2000];
 
-  if (!response.ok) {
-  const errorDetails = await response.text();
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      console.log(`Weather request attempt ${attempt}/${maxAttempts}`);
 
-  console.error("Open-Meteo API Error:", {
-    status: response.status,
-    details: errorDetails,
-  });
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(10000),
+      });
 
-  throw new Error(
-    `Weather service error (${response.status}): ${errorDetails}`
-  );
-}
+      if (!response.ok) {
+        const errorDetails = await response.text();
 
-  const data = await response.json();
+        console.error("Open-Meteo API Error:", {
+          status: response.status,
+          details: errorDetails,
+        });
 
-  return {
-    location: {
-      latitude: data.latitude,
-      longitude: data.longitude,
-      timezone: data.timezone,
-    },
+        // Retry temporary server or rate-limit errors
+        const temporaryErrors = [429, 500, 502, 503, 504];
 
-    current: data.current,
-    hourly: data.hourly,
-    daily: data.daily,
+        if (
+          temporaryErrors.includes(response.status) &&
+          attempt < maxAttempts
+        ) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, retryDelays[attempt - 1])
+          );
 
-    units: {
-      temperature: data.current_units.temperature_2m,
-      humidity: data.current_units.relative_humidity_2m,
-      precipitation: data.current_units.precipitation,
-      windSpeed: data.current_units.wind_speed_10m,
-    },
-  };
+          continue;
+        }
+
+        throw new Error(
+          `Weather service error (${response.status}): ${errorDetails}`
+        );
+      }
+
+      const data = await response.json();
+
+      return {
+        location: {
+          latitude: data.latitude,
+          longitude: data.longitude,
+          timezone: data.timezone,
+        },
+
+        current: data.current,
+        hourly: data.hourly,
+        daily: data.daily,
+
+        units: {
+          temperature: data.current_units.temperature_2m,
+          humidity: data.current_units.relative_humidity_2m,
+          precipitation: data.current_units.precipitation,
+          windSpeed: data.current_units.wind_speed,
+        },
+      };
+
+    } catch (error) {
+      console.error(
+        `Weather request attempt ${attempt} failed:`,
+        error.message
+      );
+
+      if (attempt === maxAttempts) {
+        throw error;
+      }
+
+      // Retry network errors and timeouts
+      if (
+        error.name === "AbortError" ||
+        error.name === "TimeoutError" ||
+        error.name === "TypeError"
+      ) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, retryDelays[attempt - 1])
+        );
+
+        continue;
+      }
+
+      // Do not retry other permanent errors
+      throw error;
+    }
+  }
+
+  throw new Error("Weather service is currently unavailable");
 };
 
 module.exports = getWeather;
