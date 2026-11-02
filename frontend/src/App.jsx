@@ -43,6 +43,9 @@ function App() {
   const [actionPlan, setActionPlan] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
 
+  // Dashboard page navigation
+const [activeSection, setActiveSection] = useState("overview");
+
   const [actionHistory, setActionHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
