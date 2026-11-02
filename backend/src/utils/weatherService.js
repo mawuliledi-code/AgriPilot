@@ -14,11 +14,17 @@ const getWeather = async (latitude, longitude) => {
   const params = new URLSearchParams({
     latitude: String(latitude),
     longitude: String(longitude),
+
     current:
-      "temperature_2m,relative_humidity_2m,precipitation,weather_code",
+      "temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m",
+
     hourly:
       "temperature_2m,precipitation_probability,precipitation",
-    forecast_days: "2",
+
+    daily:
+      "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max",
+
+    forecast_days: "7",
     timezone: "auto",
   });
 
@@ -38,15 +44,18 @@ const getWeather = async (latitude, longitude) => {
       longitude: data.longitude,
       timezone: data.timezone,
     },
+
     current: data.current,
     hourly: data.hourly,
+    daily: data.daily,
+
     units: {
       temperature: data.current_units.temperature_2m,
       humidity: data.current_units.relative_humidity_2m,
       precipitation: data.current_units.precipitation,
+      windSpeed: data.current_units.wind_speed_10m,
     },
   };
 };
 
 module.exports = getWeather;
-

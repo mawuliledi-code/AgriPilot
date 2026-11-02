@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import {
   login,
@@ -6,6 +5,7 @@ import {
   completeAction,
   getActionHistory,
   getMyCrops,
+  getFarmWeather,
   createCrop,
   updateCrop,
   getCropMonitoring,
@@ -13,7 +13,6 @@ import {
 import "./App.css";
 
 const FARM_ID = "6aba6aa5376f67439b22a0cf";
-
 
 function getDashboardCropStatus(crop) {
   const status = (crop.status || "planned").toLowerCase();
@@ -35,8 +34,6 @@ function getDashboardCropStatus(crop) {
 
   return status;
 }
-
-
 
 function App() {
   const [email, setEmail] = useState("");
@@ -61,6 +58,11 @@ function App() {
   const [cropMonitoring, setCropMonitoring] = useState({});
   const [monitoringLoadingId, setMonitoringLoadingId] = useState(null);
   const [monitoringErrors, setMonitoringErrors] = useState({});
+
+  // Weather dashboard
+  const [farmWeather, setFarmWeather] = useState(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState("");
 
   // Edit crop
   const [editingCropId, setEditingCropId] = useState(null);
@@ -144,6 +146,23 @@ function App() {
     }
   }
 
+  // Load weather for the farm
+  async function loadFarmWeather(token) {
+    setWeatherLoading(true);
+    setWeatherError("");
+
+    try {
+      const data = await getFarmWeather(FARM_ID, token);
+      setFarmWeather(data);
+      return data;
+    } catch (err) {
+      setWeatherError(err.message || "Could not load farm weather.");
+      console.error("Error loading farm weather:", err);
+    } finally {
+      setWeatherLoading(false);
+    }
+  }
+
   // Restore an existing login session
   useEffect(() => {
     let active = true;
@@ -165,6 +184,7 @@ function App() {
         await Promise.all([
           loadActionHistory(token),
           loadCrops(token),
+          loadFarmWeather(token),
         ]);
       } catch (err) {
         if (!active) return;
@@ -259,9 +279,11 @@ function App() {
       sessionStorage.setItem("agripilotToken", data.token);
 
       await loadActionPlan(data.token);
+
       await Promise.all([
         loadActionHistory(data.token),
         loadCrops(data.token),
+        loadFarmWeather(data.token),
       ]);
     } catch (err) {
       setError(err.message || "Login failed.");
@@ -446,9 +468,11 @@ function App() {
     };
 
     if (action.cropId) completionData.cropId = action.cropId;
+
     if (action.observationId) {
       completionData.observationId = action.observationId;
     }
+
     if (action.weatherEventId) {
       completionData.weatherEventId = action.weatherEventId;
     }
@@ -582,125 +606,123 @@ function App() {
             </article>
           </section>
 
+          {/* What Needs Attention */}
+          <section className="attention-panel">
+            <div className="attention-heading">
+              <div>
+                <p className="eyebrow">FARM PRIORITIES</p>
+                <h2>What Needs Attention?</h2>
+                <p>Review the next actions recommended for your farm.</p>
+              </div>
 
-    {/* What Needs Attention */}
-    <section className="attention-panel">
-    <div className="attention-heading">
-    <div>
-      <p className="eyebrow">FARM PRIORITIES</p>
-      <h2>What Needs Attention?</h2>
-      <p>Review the next actions recommended for your farm.</p>
-    </div>
-
-    <span className="attention-count">
-      {actions.filter((action) => action.status === "pending").length}
-      {" "}pending
-    </span>
-  </div>
-
-    {actions.filter((action) => action.status === "pending").length === 0 ? (
-    <p className="attention-empty">
-      All current recommended actions have been completed.
-      </p>
-    ) : (
-    <div className="attention-list">
-      {actions
-        .filter((action) => action.status === "pending")
-        .slice(0, 3)
-        .map((action, index) => (
-          <article
-            className="attention-item"
-            key={
-              action.weatherEventId ||
-              action.observationId ||
-              action.type ||
-              index
-            }
-            >
-            <div className="attention-item-icon">!</div>
-
-            <div className="attention-item-content">
-              <h3>{action.action || "Farm action"}</h3>
-
-              <p>
-                {action.message ||
-                  action.urgencyReason ||
-                  action.whyThisMatters ||
-                  "Review this recommendation and take the appropriate action."}
-              </p>
-
-              {action.crop && (
-                <span className="attention-crop">
-                  Crop: {action.crop}
-                </span>
-              )}
+              <span className="attention-count">
+                {actions.filter((action) => action.status === "pending").length}
+                {" "}pending
+              </span>
             </div>
-          </article>
-        ))}
-    </div>
-  )}
 
-  <a className="attention-link" href="#recommended-actions">
-    View all recommended actions →
-  </a>
-  </section>
+            {actions.filter((action) => action.status === "pending").length ===
+            0 ? (
+              <p className="attention-empty">
+                All current recommended actions have been completed.
+              </p>
+            ) : (
+              <div className="attention-list">
+                {actions
+                  .filter((action) => action.status === "pending")
+                  .slice(0, 3)
+                  .map((action, index) => (
+                    <article
+                      className="attention-item"
+                      key={
+                        action.weatherEventId ||
+                        action.observationId ||
+                        action.type ||
+                        index
+                      }
+                    >
+                      <div className="attention-item-icon">!</div>
 
+                      <div className="attention-item-content">
+                        <h3>{action.action || "Farm action"}</h3>
 
-{/* Farm Overview */}
-<section className="farm-overview">
-  <div className="farm-overview-heading">
-    <div>
-      <p className="eyebrow">FARM OVERVIEW</p>
-      <h2>Your Crops at a Glance</h2>
-      <p>
-        A quick overview of your farm's current crop plan.
-      </p>
-    </div>
+                        <p>
+                          {action.message ||
+                            action.urgencyReason ||
+                            action.whyThisMatters ||
+                            "Review this recommendation and take the appropriate action."}
+                        </p>
 
-    <span className="farm-location-badge">
-      🌍 {actionPlan.farm?.location?.city || "Your farm"}
-    </span>
-  </div>
+                        {action.crop && (
+                          <span className="attention-crop">
+                            Crop: {action.crop}
+                          </span>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+              </div>
+            )}
 
-  <div className="crop-stats-grid">
-    <article className="crop-stat-card">
-      <span>Total crops</span>
-      <strong>{crops.length}</strong>
-      <p>Registered in your farm</p>
-    </article>
+            <a className="attention-link" href="#recommended-actions">
+              View all recommended actions →
+            </a>
+          </section>
 
-    <article className="crop-stat-card planned">
-      <span>Planned</span>
-      <strong>
-        {crops.filter(
-          (crop) => getDashboardCropStatus(crop) === "planned"
-        ).length}
-      </strong>
-      <p>Awaiting or scheduled for planting</p>
-    </article>
+          {/* Farm Overview */}
+          <section className="farm-overview">
+            <div className="farm-overview-heading">
+              <div>
+                <p className="eyebrow">FARM OVERVIEW</p>
+                <h2>Your Crops at a Glance</h2>
+                <p>
+                  A quick overview of your farm's current crop plan.
+                </p>
+              </div>
 
-    <article className="crop-stat-card growing">
-      <span>Growing</span>
-      <strong>
-        {crops.filter(
-          (crop) => getDashboardCropStatus(crop) === "growing"
-        ).length}
-      </strong>
-      <p>Recorded as growing</p>
-    </article>
+              <span className="farm-location-badge">
+                🌍 {actionPlan.farm?.location?.city || "Your farm"}
+              </span>
+            </div>
 
-    <article className="crop-stat-card ready">
-      <span>Ready for harvest</span>
-      <strong>
-        {crops.filter(
-          (crop) => getDashboardCropStatus(crop) === "ready"
-        ).length}
-      </strong>
-      <p>Marked ready for harvest</p>
-    </article>
-    </div>  
-  </section>
+            <div className="crop-stats-grid">
+              <article className="crop-stat-card">
+                <span>Total crops</span>
+                <strong>{crops.length}</strong>
+                <p>Registered in your farm</p>
+              </article>
 
+              <article className="crop-stat-card planned">
+                <span>Planned</span>
+                <strong>
+                  {crops.filter(
+                    (crop) => getDashboardCropStatus(crop) === "planned"
+                  ).length}
+                </strong>
+                <p>Awaiting or scheduled for planting</p>
+              </article>
+
+              <article className="crop-stat-card growing">
+                <span>Growing</span>
+                <strong>
+                  {crops.filter(
+                    (crop) => getDashboardCropStatus(crop) === "growing"
+                  ).length}
+                </strong>
+                <p>Recorded as growing</p>
+              </article>
+
+              <article className="crop-stat-card ready">
+                <span>Ready for harvest</span>
+                <strong>
+                  {crops.filter(
+                    (crop) => getDashboardCropStatus(crop) === "ready"
+                  ).length}
+                </strong>
+                <p>Marked ready for harvest</p>
+              </article>
+            </div>
+          </section>
 
           {/* Crop Management */}
           <section className="actions-section" id="crop-management">
@@ -1281,6 +1303,118 @@ function App() {
           >
             {planLoading ? "Refreshing..." : "Refresh action plan"}
           </button>
+
+          {/* Farm Weather Dashboard */}
+          <section
+            className="actions-section weather-section"
+            id="farm-weather"
+          >
+            <h2>Farm Weather</h2>
+            <p className="history-subtitle">
+              Live weather conditions and the 7-day forecast for your farm.
+            </p>
+
+            {weatherLoading ? (
+              <p>Loading farm weather...</p>
+            ) : weatherError ? (
+              <p className="error-message" role="alert">
+                {weatherError}
+              </p>
+            ) : farmWeather?.weather ? (
+              <>
+                <div className="weather-current">
+                  <h3>Current Conditions</h3>
+                  <p className="weather-temperature">
+                    {farmWeather.weather.current.temperature_2m}°C
+                  </p>
+                  <p>
+                    Humidity:{" "}
+                    {farmWeather.weather.current.relative_humidity_2m}%
+                  </p>
+                  <p>
+                    Wind: {farmWeather.weather.current.wind_speed_10m} km/h
+                  </p>
+                  <p>
+                    Rainfall: {farmWeather.weather.current.precipitation} mm
+                  </p>
+                </div>
+
+                <h3>7-Day Forecast</h3>
+
+                <div className="weather-forecast">
+                  {farmWeather.weather.daily.time.map((date, index) => (
+                    <article className="weather-day" key={date}>
+                      <strong>
+                        {new Date(`${date}T12:00:00`).toLocaleDateString(
+                          "en-GB",
+                          {
+                            weekday: "short",
+                            day: "numeric",
+                            month: "short",
+                          }
+                        )}
+                      </strong>
+
+                      <p>
+                        {farmWeather.weather.daily.temperature_2m_max[index]}°C
+                        /
+                        {" "}
+                        {farmWeather.weather.daily.temperature_2m_min[index]}°C
+                      </p>
+
+                      <p>
+                        Rain:{" "}
+                        {farmWeather.weather.daily.precipitation_sum[index]} mm
+                      </p>
+
+                      <p>
+                        Rain chance:{" "}
+                        {
+                          farmWeather.weather.daily
+                            .precipitation_probability_max[index]
+                        }
+                        %
+                      </p>
+                    </article>
+                  ))}
+                </div>
+
+                <h3>Farming Recommendations</h3>
+
+                {farmWeather.recommendations?.length > 0 ? (
+                  farmWeather.recommendations.map(
+                    (recommendation, index) => (
+                      <article className="action-card" key={index}>
+                        <p>
+                          {typeof recommendation === "string"
+                            ? recommendation
+                            : recommendation.message ||
+                              recommendation.description ||
+                              JSON.stringify(recommendation)}
+                        </p>
+                      </article>
+                    )
+                  )
+                ) : (
+                  <p>No specific weather recommendations right now.</p>
+                )}
+              </>
+            ) : (
+              <p>Weather information is not available yet.</p>
+            )}
+
+            <button
+              type="button"
+              className="refresh-button"
+              onClick={() => {
+                const token = sessionStorage.getItem("agripilotToken");
+                if (token) loadFarmWeather(token);
+              }}
+              disabled={weatherLoading}
+            >
+              {weatherLoading ? "Refreshing weather..." : "Refresh weather"}
+            </button>
+          </section>
 
           {/* Action History */}
           <section
