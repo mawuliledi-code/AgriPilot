@@ -33,8 +33,17 @@ const getWeather = async (latitude, longitude) => {
   const response = await fetch(url);
 
   if (!response.ok) {
-    throw new Error("Weather service is currently unavailable");
-  }
+  const errorDetails = await response.text();
+
+  console.error("Open-Meteo API Error:", {
+    status: response.status,
+    details: errorDetails,
+  });
+
+  throw new Error(
+    `Weather service error (${response.status}): ${errorDetails}`
+  );
+}
 
   const data = await response.json();
 

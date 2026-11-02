@@ -49,15 +49,25 @@ const getCropActionPlan = async (req, res) => {
     });
 
     // Get current weather and weather-based recommendations
-    const weather = await getWeather(
-      farm.latitude,
-      farm.longitude
+    let weatherRecommendations = [];
+
+    try {
+      const weather = await getWeather(
+        farm.latitude,
+        farm.longitude
     );
 
-    const weatherRecommendations = getWeatherRecommendations(
+      weatherRecommendations = getWeatherRecommendations(
       weather,
       crops
     );
+  } catch (weatherError) {
+    console.error(
+      "Weather unavailable. Continuing without weather recommendations:",
+      weatherError.message
+    );
+  }
+  
 
     // Combine everything into one prioritized action plan
     const actionPlan = createCropActionPlan(
