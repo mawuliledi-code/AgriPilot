@@ -1487,3 +1487,164 @@ button:disabled {
   align-self: start;
   overflow-y: auto;
 }
+
+
+/* =================================
+   FARM WEATHER DASHBOARD
+================================= */
+
+.weather-section {
+  padding: 28px;
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.weather-section > h2 {
+  font-size: 26px;
+  color: #173f2b;
+  margin-bottom: 8px;
+}
+
+.weather-section > h3 {
+  color: #244b35;
+  font-size: 19px;
+  margin: 30px 0 16px;
+}
+
+.weather-section .history-subtitle {
+  color: #718078;
+  margin-bottom: 24px;
+}
+
+/* Current weather card */
+
+.weather-current {
+  padding: 28px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #e4f5e9, #f1f8ed);
+  border: 1px solid #d6eadb;
+  margin-bottom: 28px;
+}
+
+.weather-current h3 {
+  color: #315d40;
+  margin: 0 0 12px;
+}
+
+.weather-temperature {
+  font-size: 54px;
+  font-weight: 700;
+  color: #174b2e;
+  margin: 12px 0 20px;
+}
+
+.weather-current p:not(.weather-temperature) {
+  display: inline-block;
+  margin: 8px 18px 0 0;
+  color: #496653;
+  font-size: 14px;
+}
+
+/* Seven-day forecast */
+
+.weather-forecast {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.weather-day {
+  padding: 18px 14px;
+  border: 1px solid #e5ece7;
+  border-radius: 14px;
+  background: #fbfdfb;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.weather-day:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(28, 74, 45, 0.08);
+}
+
+.weather-day strong {
+  display: block;
+  color: #315d40;
+  font-size: 14px;
+  margin-bottom: 14px;
+}
+
+.weather-day p {
+  color: #66756b;
+  font-size: 13px;
+  margin: 9px 0;
+  line-height: 1.5;
+}
+
+.weather-day p:first-of-type {
+  color: #1c422d;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* Farming recommendations */
+
+.weather-section .action-card {
+  background: #fffaf0;
+  border: 1px solid #f1e4c6;
+  border-left: 4px solid #e4a83b;
+  border-radius: 12px;
+  padding: 17px 20px;
+  margin: 12px 0;
+  box-shadow: none;
+}
+
+.weather-section .action-card p {
+  color: #65532f;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Refresh weather button */
+
+.weather-section .refresh-button {
+  margin-top: 24px;
+  padding: 12px 22px;
+  border: none;
+  border-radius: 9px;
+  background: #287647;
+  color: #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.weather-section .refresh-button:hover {
+  background: #1d5d37;
+}
+
+.weather-section .refresh-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Mobile layout */
+
+@media (max-width: 600px) {
+  .weather-section {
+    padding: 18px;
+  }
+
+  .weather-temperature {
+    font-size: 42px;
+  }
+
+  .weather-forecast {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .weather-current p:not(.weather-temperature) {
+    display: block;
+    margin: 10px 0;
+  }
+}
