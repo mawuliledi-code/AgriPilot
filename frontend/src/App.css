@@ -539,14 +539,24 @@ button:disabled {
 }
 
 .sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+
   width: 250px;
   min-width: 250px;
-  min-height: 100vh;
+  height: 100vh;
+
   display: flex;
   flex-direction: column;
   padding: 30px 18px;
+
   background: #ffffff;
   border-right: 1px solid #e3e9df;
+
+  overflow-y: auto;
+  z-index: 100;
 }
 
 .sidebar-brand {
@@ -1468,4 +1478,12 @@ button:disabled {
   .attention-heading {
     flex-direction: column;
   }
+}
+/* Keep the sidebar visible while navigating the dashboard */
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  align-self: start;
+  overflow-y: auto;
 }
