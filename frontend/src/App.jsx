@@ -1490,7 +1490,7 @@ function App() {
                   </button>
                 </div>
 
-                {filteredActions.lenght === 0 ? (
+                {filteredActions.length === 0 ? (
                   <p>
                     {actionFilter === "all"
                     ? "No actions are currently available."
