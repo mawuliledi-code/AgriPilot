@@ -1,6 +1,9 @@
 
 const API_BASE_URL = "http://localhost:3000/api";
 
+// Prevent duplicate simultaneous weather requests.
+const pendingWeatherRequests = new Map();
+
 // ===== Shared Response Handling =====
 
 async function readResponse(response, fallbackMessage) {
@@ -125,30 +128,55 @@ export async function getMyCrops(token) {
 }
 
 
-export async function getFarmWeather(farmId, token) {
+export function getFarmWeather(farmId, token) {
   if (!token) {
-    throw new Error("Your session has expired. Please log in again.");
+    return Promise.reject(
+      new Error("Your session has expired. Please log in again.")
+    );
   }
 
   if (!farmId) {
-    throw new Error("Farm ID is required to load weather.");
+    return Promise.reject(
+      new Error("Farm ID is required to load weather.")
+    );
   }
 
-  const response = await fetch(
-    `${API_BASE_URL}/weather/${farmId}`,
-    {
-      method: "GET",
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
+  // Give each farm and login session its own request key.
+  const requestKey = `${farmId}:${token}`;
+
+  // Reuse an existing request if one is already running.
+  if (pendingWeatherRequests.has(requestKey)) {
+    console.log("Weather request already running. Reusing it.");
+    return pendingWeatherRequests.get(requestKey);
+  }
+
+  const request = (async () => {
+    const response = await fetch(
+      `${API_BASE_URL}/weather/${encodeURIComponent(farmId)}`,
+      {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      }
+    );
+
+    return readResponse(response, "Could not load farm weather");
+  })();
+
+  pendingWeatherRequests.set(requestKey, request);
+
+  // Remove the request after it succeeds or fails.
+  request.finally(() => {
+    if (pendingWeatherRequests.get(requestKey) === request) {
+      pendingWeatherRequests.delete(requestKey);
     }
-  );
+  }).catch(() => {});
 
-  return readResponse(response, "Could not load farm weather");
+  return request;
 }
-
 
 // Register a new crop.
 export async function createCrop(token, cropData) {

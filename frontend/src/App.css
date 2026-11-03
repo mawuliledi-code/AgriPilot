@@ -1648,3 +1648,117 @@ button:disabled {
     margin: 10px 0;
   }
 }
+
+/* ===== Upcoming Harvests ===== */
+
+.harvest-section {
+  margin-bottom: 30px;
+  padding: 26px;
+  background: #ffffff;
+  border: 1px solid #e0e9de;
+  border-radius: 18px;
+  box-shadow: 0 5px 18px rgba(30, 60, 35, 0.035);
+}
+
+.harvest-heading {
+  margin-bottom: 22px;
+}
+
+.harvest-heading h2 {
+  margin: 0;
+  color: #213f29;
+  font-size: 23px;
+}
+
+.harvest-heading > div > p:last-child {
+  margin: 9px 0 0;
+  color: #718073;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.harvest-list {
+  display: grid;
+  gap: 12px;
+}
+
+.harvest-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 16px;
+  background: #f8faf7;
+  border: 1px solid #e4ebe0;
+  border-radius: 12px;
+}
+
+.harvest-crop-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  background: #eaf4e8;
+  border-radius: 12px;
+  font-size: 21px;
+}
+
+.harvest-item-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.harvest-item-details h3 {
+  margin: 0 0 6px;
+  color: #294632;
+  font-size: 15px;
+}
+
+.harvest-item-details p {
+  margin: 0;
+  color: #718073;
+  font-size: 13px;
+}
+
+.harvest-countdown {
+  padding: 7px 11px;
+  color: #397047;
+  background: #eaf4e8;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.harvest-countdown.soon {
+  color: #855b0b;
+  background: #fff0cf;
+}
+
+.harvest-countdown.overdue {
+  color: #a12626;
+  background: #fff0f0;
+}
+
+.harvest-empty {
+  padding: 16px;
+  color: #68766b;
+  background: #f8faf7;
+  border-radius: 10px;
+}
+
+@media (max-width: 600px) {
+  .harvest-section {
+    padding: 18px;
+  }
+
+  .harvest-item {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .harvest-countdown {
+    margin-left: 57px;
+  }
+}
