@@ -54,6 +54,33 @@ const createFarm = async (req, res) => {
     }
 };
 
-module.exports = {
-    createFarm
+
+// Get all farms belonging to the logged-in farmer
+const getMyFarms = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    const farms = await Farm.find({ owner: userId })
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      message: "Farms retrieved successfully",
+      count: farms.length,
+      farms
+    });
+
+  } catch (error) {
+    console.error("Error retrieving farms:", error);
+
+    return res.status(500).json({
+      message: "Error retrieving farms",
+      error: error.message
+    });
+  }
 };
+
+module.exports = {
+    createFarm,
+    getMyFarms
+};
+

@@ -2,18 +2,20 @@
 import { useEffect, useState } from "react";
 import {
   login,
+  getMyFarms,
   getActionPlan,
   completeAction,
   getActionHistory,
   getMyCrops,
   getFarmWeather,
   createCrop,
+  deleteCrop,
   updateCrop,
   getCropMonitoring,
 } from "./api";
 import "./App.css";
 
-const FARM_ID = "6aba6aa5376f67439b22a0cf";
+
 
 function getDashboardCropStatus(crop) {
   const status = (crop.status || "planned").toLowerCase();
@@ -57,6 +59,7 @@ function App() {
   const [error, setError] = useState("");
   const [actionPlan, setActionPlan] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [farmId, setFarmId] = useState("");
 
   // Dashboard page navigation
   const [activeSection, setActiveSection] = useState("overview");
@@ -107,12 +110,17 @@ function App() {
   const [cropFormSuccess, setCropFormSuccess] = useState("");
 
   // Load the action plan
-  async function loadActionPlan(token) {
+  async function loadActionPlan(token, selectedFarmId = farmId) {
+    if (!selectedFarmId) {
+      setError("No farm found. Please add a farm first.");
+      return;
+    }
+
     setPlanLoading(true);
     setError("");
 
     try {
-      const data = await getActionPlan(FARM_ID, token);
+      const data = await getActionPlan(selectedFarmId, token);
       setActionPlan(data);
       return data;
     } catch (err) {
@@ -124,12 +132,14 @@ function App() {
   }
 
   // Load action history
-  async function loadActionHistory(token) {
+  async function loadActionHistory(token, selectedFarmId = farmId) {
+    if (!selectedFarmId) return;
+
     setHistoryLoading(true);
     setHistoryError("");
 
     try {
-      const data = await getActionHistory(FARM_ID, token);
+      const data = await getActionHistory(selectedFarmId, token);
 
       const records = Array.isArray(data)
         ? data
@@ -167,12 +177,14 @@ function App() {
   }
 
   // Load weather for the farm
-  async function loadFarmWeather(token) {
+   async function loadFarmWeather(token, selectedFarmId = farmId) {
+    if (!selectedFarmId) return;
+
     setWeatherLoading(true);
     setWeatherError("");
 
     try {
-      const data = await getFarmWeather(FARM_ID, token);
+      const data = await getFarmWeather(selectedFarmId, token);
       setFarmWeather(data);
       return data;
     } catch (err) {
@@ -181,9 +193,9 @@ function App() {
     } finally {
       setWeatherLoading(false);
     }
-  }
+   }
 
-  // Restore an existing login session
+    // Restore an existing login session
   useEffect(() => {
     let active = true;
 
@@ -196,22 +208,40 @@ function App() {
       }
 
       try {
-        const data = await getActionPlan(FARM_ID, token);
+        // 1. Retrieve the user's farms
+        const farmData = await getMyFarms(token);
 
         if (!active) return;
-        setActionPlan(data);
+
+        const farms = farmData.farms || [];
+
+        if (farms.length === 0) {
+          setFarmId("");
+          setActionPlan(null);
+          setError("No farm found. Please add a farm first.");
+          return;
+        }
+
+        // 2. Select the first farm
+        const selectedFarmId = farms[0]._id;
+        setFarmId(selectedFarmId);
+
+        // 3. Load farm-related information
+        const plan = await getActionPlan(selectedFarmId, token);
+
+        if (!active) return;
+        setActionPlan(plan);
 
         await Promise.all([
-          loadActionHistory(token),
+          loadActionHistory(token, selectedFarmId),
           loadCrops(token),
-          loadFarmWeather(token),
+          loadFarmWeather(token, selectedFarmId),
         ]);
+
       } catch (err) {
         if (!active) return;
 
-        sessionStorage.removeItem("agripilotToken");
-        setActionPlan(null);
-        setError(err.message || "Please log in again.");
+        setError(err.message || "Could not restore your session.");
       } finally {
         if (active) setCheckingSession(false);
       }
@@ -295,15 +325,34 @@ function App() {
         throw new Error("Login succeeded without a valid token.");
       }
 
-      sessionStorage.setItem("agripilotToken", data.token);
+      const token = data.token;
 
-      await loadActionPlan(data.token);
+      sessionStorage.setItem("agripilotToken", token);
 
+      // 1. Retrieve the user's farms
+      const farmData = await getMyFarms(token);
+      const farms = farmData.farms || [];
+
+      if (farms.length === 0) {
+        setFarmId("");
+        throw new Error("No farm found. Please add a farm first.");
+      }
+
+      // 2. Select the first farm
+      const selectedFarmId = farms[0]._id;
+      setFarmId(selectedFarmId);
+
+      // 3. Load the action plan
+      const plan = await getActionPlan(selectedFarmId, token);
+      setActionPlan(plan);
+
+      // 4. Load the remaining dashboard data
       await Promise.all([
-        loadActionHistory(data.token),
-        loadCrops(data.token),
-        loadFarmWeather(data.token),
+        loadActionHistory(token, selectedFarmId),
+        loadCrops(token),
+        loadFarmWeather(token, selectedFarmId),
       ]);
+
     } catch (err) {
       setError(err.message || "Login failed.");
     } finally {
@@ -311,7 +360,6 @@ function App() {
       setCheckingSession(false);
     }
   }
-
   // Add a new crop
   async function handleCreateCrop(event) {
     event.preventDefault();
@@ -320,6 +368,11 @@ function App() {
 
     if (!token) {
       setCropFormError("Please log in again before adding a crop.");
+      return;
+    }
+
+    if (!farmId) {
+      setCropFormError("No farm selected. Please try again.");
       return;
     }
 
@@ -346,7 +399,7 @@ function App() {
         expectedHarvestDate,
         status: newCropStatus,
         notes: cropNotes.trim(),
-        farm: FARM_ID,
+        farm: farmId,
       };
 
       await createCrop(token, cropData);
@@ -454,6 +507,46 @@ function App() {
     }
   }
 
+  // Delete an existing crop
+  async function handleDeleteCrop(crop) {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${crop.name || "this crop"}?`
+    );
+
+    if (!confirmed) return;
+
+    const token = sessionStorage.getItem("agripilotToken");
+
+    if (!token) {
+      setCropError("Your session has expired. Please log in again.");
+      return;
+    }
+
+    try {
+      setCropLoading(true);
+      setCropError("");
+
+      await deleteCrop(token, crop._id);
+      await loadCrops(token);
+
+      setCropMonitoring((previous) => {
+        const updated = { ...previous };
+        delete updated[crop._id];
+        return updated;
+      });
+
+      setMonitoringErrors((previous) => {
+        const updated = { ...previous };
+        delete updated[crop._id];
+        return updated;
+      });
+    } catch (err) {
+      setCropError(err.message || "Could not delete crop.");
+    } finally {
+      setCropLoading(false);
+    }
+  }
+
   // Complete a recommended action
   async function handleCompleteAction(action) {
     const token = sessionStorage.getItem("agripilotToken");
@@ -502,9 +595,14 @@ function App() {
       setCompletingAction(actionKey);
       setError("");
 
-      await completeAction(FARM_ID, token, completionData);
-      await loadActionPlan(token);
-      await loadActionHistory(token);
+    if (!farmId) {
+      setError("No farm selected. Please try again.");
+      return;
+    }
+
+    await completeAction(farmId, token, completionData);
+    await loadActionPlan(token, farmId);
+    await loadActionHistory(token, farmId);
     } catch (err) {
       setError(err.message || "Could not complete this action.");
     } finally {
@@ -1340,6 +1438,15 @@ function App() {
                               ? "Editing Crop"
                               : "Edit Crop"}
                           </button>
+
+                          <button
+                            type="button"
+                            className="refresh-button"
+                            onClick={() => handleDeleteCrop(crop)}
+                            disabled={!crop._id || cropLoading}
+                          >
+                            Delete Crop
+                            </button>
 
                           {editingCropId === crop._id && (
                             <form

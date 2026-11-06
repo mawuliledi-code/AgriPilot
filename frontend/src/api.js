@@ -40,6 +40,27 @@ export async function login(email, password) {
   return data;
 }
 
+
+// ===== Farm Management =====
+
+// Get all farms belonging to the logged-in farmer.
+export async function getMyFarms(token) {
+  if (!token) {
+    throw new Error("Your session has expired. Please log in again.");
+  }
+
+  const response = await fetch(`${API_BASE_URL}/farms/my-farms`, {
+    method: "GET",
+    cache: "no-store",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+  });
+
+  return readResponse(response, "Could not load your farms");
+}
+
 // ===== Action Planner =====
 
 export async function getActionPlan(farmId, token) {

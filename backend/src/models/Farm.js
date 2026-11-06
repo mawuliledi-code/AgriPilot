@@ -44,7 +44,7 @@ const farmSchema = new mongoose.Schema(
     size: {
       type: Number,
       required: true,
-      min: 0,
+      min: 0.01,
     },
 
     crops: [
