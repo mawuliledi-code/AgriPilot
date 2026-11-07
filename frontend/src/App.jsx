@@ -652,6 +652,11 @@ function App() {
   // Main dashboard
   if (actionPlan) {
     const actions = actionPlan.actions || [];
+    
+
+    const pendingActions = actions.filter(
+      (action) => action.status === "pending"
+    );
 
     const filteredActions = actions.filter((action) => {
       if (actionFilter === "all") return true;
@@ -882,18 +887,31 @@ function App() {
             <>
               <section className="stats-grid">
                 <article className="stat-card">
-                  <span>Total actions</span>
-                  <strong>{actionPlan.totalActions ?? actions.length}</strong>
+                  <span>Total crops</span>
+                  <strong>{crops.length}</strong>
+                </article>
+
+                <article className="stat-card">
+                  <span>Growing crops</span>
+                  <strong>
+                    {crops.filter(
+                      (crop) => getDashboardCropStatus(crop) === "growing"
+                    ).length}
+                  </strong>
+                </article>
+
+                <article className="stat-card">
+                  <span>Ready for harvest</span>
+                  <strong>
+                    {crops.filter(
+                      (crop) => getDashboardCropStatus(crop) === "ready"
+                    ).length}
+                  </strong>
                 </article>
 
                 <article className="stat-card">
                   <span>Pending actions</span>
                   <strong>{actionPlan.pendingActions ?? 0}</strong>
-                </article>
-
-                <article className="stat-card">
-                  <span>Completed actions</span>
-                  <strong>{actionPlan.completedActions ?? 0}</strong>
                 </article>
               </section>
 
@@ -910,23 +928,19 @@ function App() {
 
                   <span className="attention-count">
                     {
-                      actions.filter(
-                        (action) => action.status === "pending"
-                      ).length
+                      pendingActions.length
                     }{" "}
                     pending
                   </span>
                 </div>
 
-                {actions.filter((action) => action.status === "pending")
-                  .length === 0 ? (
+                 {pendingActions.length === 0 ? (
                   <p className="attention-empty">
                     All current recommended actions have been completed.
                   </p>
                 ) : (
                   <div className="attention-list">
-                    {actions
-                      .filter((action) => action.status === "pending")
+                    {pendingActions
                       .slice(0, 3)
                       .map((action, index) => (
                         <article
