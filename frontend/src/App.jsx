@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import {
   login,
@@ -14,8 +13,6 @@ import {
   getCropMonitoring,
 } from "./api";
 import "./App.css";
-
-
 
 function getDashboardCropStatus(crop) {
   const status = (crop.status || "planned").toLowerCase();
@@ -50,7 +47,6 @@ function getDaysUntilHarvest(harvestDate) {
     (harvest.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
   );
 }
-
 
 function App() {
   const [email, setEmail] = useState("");
@@ -177,7 +173,7 @@ function App() {
   }
 
   // Load weather for the farm
-   async function loadFarmWeather(token, selectedFarmId = farmId) {
+  async function loadFarmWeather(token, selectedFarmId = farmId) {
     if (!selectedFarmId) return;
 
     setWeatherLoading(true);
@@ -193,9 +189,9 @@ function App() {
     } finally {
       setWeatherLoading(false);
     }
-   }
+  }
 
-    // Restore an existing login session
+  // Restore an existing login session
   useEffect(() => {
     let active = true;
 
@@ -230,6 +226,7 @@ function App() {
         const plan = await getActionPlan(selectedFarmId, token);
 
         if (!active) return;
+
         setActionPlan(plan);
 
         await Promise.all([
@@ -237,7 +234,6 @@ function App() {
           loadCrops(token),
           loadFarmWeather(token, selectedFarmId),
         ]);
-
       } catch (err) {
         if (!active) return;
 
@@ -352,7 +348,6 @@ function App() {
         loadCrops(token),
         loadFarmWeather(token, selectedFarmId),
       ]);
-
     } catch (err) {
       setError(err.message || "Login failed.");
     } finally {
@@ -360,6 +355,7 @@ function App() {
       setCheckingSession(false);
     }
   }
+
   // Add a new crop
   async function handleCreateCrop(event) {
     event.preventDefault();
@@ -595,14 +591,14 @@ function App() {
       setCompletingAction(actionKey);
       setError("");
 
-    if (!farmId) {
-      setError("No farm selected. Please try again.");
-      return;
-    }
+      if (!farmId) {
+        setError("No farm selected. Please try again.");
+        return;
+      }
 
-    await completeAction(farmId, token, completionData);
-    await loadActionPlan(token, farmId);
-    await loadActionHistory(token, farmId);
+      await completeAction(farmId, token, completionData);
+      await loadActionPlan(token, farmId);
+      await loadActionHistory(token, farmId);
     } catch (err) {
       setError(err.message || "Could not complete this action.");
     } finally {
@@ -652,7 +648,6 @@ function App() {
   // Main dashboard
   if (actionPlan) {
     const actions = actionPlan.actions || [];
-    
 
     const pendingActions = actions.filter(
       (action) => action.status === "pending"
@@ -676,21 +671,21 @@ function App() {
           {/* Sidebar navigation */}
           <nav className="sidebar-nav">
             <a
-             href="#overview"
-            className={`nav-link ${
-              activeSection === "overview" ? "active" : ""
-            }`}
-            onClick={(event) => {
-              event.preventDefault();
-              setActiveSection("overview");
-              window.scrollTo({
-               top: 0,
-              behavior: "smooth",
-            });
-          }}
-        >
-          <span>▦</span> Overview
-        </a>
+              href="#overview"
+              className={`nav-link ${
+                activeSection === "overview" ? "active" : ""
+              }`}
+              onClick={(event) => {
+                event.preventDefault();
+                setActiveSection("overview");
+                window.scrollTo({
+                  top: 0,
+                  behavior: "smooth",
+                });
+              }}
+            >
+              <span>▦</span> Overview
+            </a>
 
             <a
               href="#crop-management"
@@ -832,8 +827,8 @@ function App() {
 
                         <p>
                           Rain:{" "}
-                          {farmWeather.weather.daily.precipitation_sum[index]}
-                          {" "}mm
+                          {farmWeather.weather.daily.precipitation_sum[index]}{" "}
+                          mm
                         </p>
 
                         <p>
@@ -927,51 +922,46 @@ function App() {
                   </div>
 
                   <span className="attention-count">
-                    {
-                      pendingActions.length
-                    }{" "}
-                    pending
+                    {pendingActions.length} pending
                   </span>
                 </div>
 
-                 {pendingActions.length === 0 ? (
+                {pendingActions.length === 0 ? (
                   <p className="attention-empty">
                     All current recommended actions have been completed.
                   </p>
                 ) : (
                   <div className="attention-list">
-                    {pendingActions
-                      .slice(0, 3)
-                      .map((action, index) => (
-                        <article
-                          className="attention-item"
-                          key={
-                            action.weatherEventId ||
-                            action.observationId ||
-                            action.type ||
-                            index
-                          }
-                        >
-                          <div className="attention-item-icon">!</div>
+                    {pendingActions.slice(0, 3).map((action, index) => (
+                      <article
+                        className="attention-item"
+                        key={
+                          action.weatherEventId ||
+                          action.observationId ||
+                          action.type ||
+                          index
+                        }
+                      >
+                        <div className="attention-item-icon">!</div>
 
-                          <div className="attention-item-content">
-                            <h3>{action.action || "Farm action"}</h3>
+                        <div className="attention-item-content">
+                          <h3>{action.action || "Farm action"}</h3>
 
-                            <p>
-                              {action.message ||
-                                action.urgencyReason ||
-                                action.whyThisMatters ||
-                                "Review this recommendation and take the appropriate action."}
-                            </p>
+                          <p>
+                            {action.message ||
+                              action.urgencyReason ||
+                              action.whyThisMatters ||
+                              "Review this recommendation and take the appropriate action."}
+                          </p>
 
-                            {action.crop && (
-                              <span className="attention-crop">
-                                Crop: {action.crop}
-                              </span>
-                            )}
-                          </div>
-                        </article>
-                      ))}
+                          {action.crop && (
+                            <span className="attention-crop">
+                              Crop: {action.crop}
+                            </span>
+                          )}
+                        </div>
+                      </article>
+                    ))}
                   </div>
                 )}
 
@@ -984,10 +974,10 @@ function App() {
               <section className="farm-overview">
                 <div className="farm-overview-heading">
                   <div>
-                    <p className="eyebrow">FARM OVERVIEW</p>
-                    <h2>Your Crops at a Glance</h2>
+                    <p className="eyebrow">CROP PLANNING</p>
+                    <h2>Your Crops Progress</h2>
                     <p>
-                      A quick overview of your farm's current crop plan.
+                      Track crops planned for planting and crop already harvested.
                     </p>
                   </div>
 
@@ -997,125 +987,106 @@ function App() {
                 </div>
 
                 <div className="crop-stats-grid">
-                  <article className="crop-stat-card">
-                    <span>Total crops</span>
-                    <strong>{crops.length}</strong>
-                    <p>Registered in your farm</p>
-                  </article>
-
                   <article className="crop-stat-card planned">
-                    <span>Planned</span>
+                    <span>Planned crops</span>
                     <strong>
                       {
                         crops.filter(
-                          (crop) =>
-                            getDashboardCropStatus(crop) === "planned"
+                          (crop) => getDashboardCropStatus(crop) === "planned"
                         ).length
                       }
                     </strong>
-                    <p>Awaiting or scheduled for planting</p>
+                    <p>Crops awaiting planting</p>
                   </article>
 
-                  <article className="crop-stat-card growing">
-                    <span>Growing</span>
+                  <article className="crop-stat-card">
+                    <span>Harvested crops</span>
                     <strong>
                       {
                         crops.filter(
-                          (crop) =>
-                            getDashboardCropStatus(crop) === "growing"
+                          (crop) => getDashboardCropStatus(crop) === "harvested"
                         ).length
                       }
                     </strong>
-                    <p>Recorded as growing</p>
-                  </article>
-
-                  <article className="crop-stat-card ready">
-                    <span>Ready for harvest</span>
-                    <strong>
-                      {
-                        crops.filter(
-                          (crop) =>
-                            getDashboardCropStatus(crop) === "ready"
-                        ).length
-                      }
-                    </strong>
-                    <p>Marked ready for harvest</p>
+                    <p>Crops already harvested</p>
                   </article>
                 </div>
               </section>
 
               {/* Upcoming Harvests */}
-            <section className="harvest-section">
-            <div className="harvest-heading">
-            <div>
-             <p className="eyebrow">HARVEST PLANNING</p>
-             <h2>Upcoming Harvests</h2>
-             <p>Keep track of crops approaching their expected harvest dates.</p>
-              </div>
-            </div>
-
-      {crops.filter(
-        (crop) =>
-          crop.expectedHarvestDate &&
-          getDashboardCropStatus(crop) !== "harvested"
-      ).length === 0 ? (
-        <p className="harvest-empty">
-          No upcoming harvest dates recorded yet.
-        </p>
-      ) : (
-        <div className="harvest-list">
-          {[...crops]
-            .filter(
-              (crop) =>
-                crop.expectedHarvestDate &&
-                getDashboardCropStatus(crop) !== "harvested"
-            )
-            .sort(
-              (a, b) =>
-                new Date(a.expectedHarvestDate) -
-                new Date(b.expectedHarvestDate)
-            )
-            .slice(0, 5)
-            .map((crop) => {
-              const daysLeft = getDaysUntilHarvest(
-                crop.expectedHarvestDate
-              );
-
-              return (
-                <article className="harvest-item" key={crop._id}>
-                  <div className="harvest-crop-icon">🌾</div>
-
-                  <div className="harvest-item-details">
-                    <h3>{crop.name}</h3>
+              <section className="harvest-section">
+                <div className="harvest-heading">
+                  <div>
+                    <p className="eyebrow">HARVEST PLANNING</p>
+                    <h2>Upcoming Harvests</h2>
                     <p>
-                      Expected harvest:{" "}
-                      {new Date(
-                        `${crop.expectedHarvestDate.slice(0, 10)}T00:00:00`
-                      ).toLocaleDateString("en-GB")}
+                      Keep track of crops approaching their expected harvest dates.
                     </p>
                   </div>
+                </div>
 
-                  <span
-                    className={`harvest-countdown ${
-                      daysLeft < 0
-                        ? "overdue"
-                        : daysLeft <= 7
-                          ? "soon"
-                          : ""
-                    }`}
-                  >
-                    {daysLeft < 0
-                      ? `${Math.abs(daysLeft)} days overdue`
-                      : daysLeft === 0
-                        ? "Expected today"
-                        : `${daysLeft} days left`}
-                  </span>
-                </article>
-              );
-            })}
-        </div>
-      )}
-    </section>
+                {crops.filter(
+                  (crop) =>
+                    crop.expectedHarvestDate &&
+                    getDashboardCropStatus(crop) !== "harvested"
+                ).length === 0 ? (
+                  <p className="harvest-empty">
+                    No upcoming harvest dates recorded yet.
+                  </p>
+                ) : (
+                  <div className="harvest-list">
+                    {[...crops]
+                      .filter(
+                        (crop) =>
+                          crop.expectedHarvestDate &&
+                          getDashboardCropStatus(crop) !== "harvested"
+                      )
+                      .sort(
+                        (a, b) =>
+                          new Date(a.expectedHarvestDate) -
+                          new Date(b.expectedHarvestDate)
+                      )
+                      .slice(0, 5)
+                      .map((crop) => {
+                        const daysLeft = getDaysUntilHarvest(
+                          crop.expectedHarvestDate
+                        );
+
+                        return (
+                          <article className="harvest-item" key={crop._id}>
+                            <div className="harvest-crop-icon">🌾</div>
+
+                            <div className="harvest-item-details">
+                              <h3>{crop.name}</h3>
+                              <p>
+                                Expected harvest:{" "}
+                                {new Date(
+                                  `${crop.expectedHarvestDate.slice(0, 10)}T00:00:00`
+                                ).toLocaleDateString("en-GB")}
+                              </p>
+                            </div>
+
+                            <span
+                              className={`harvest-countdown ${
+                                daysLeft < 0
+                                  ? "overdue"
+                                  : daysLeft <= 7
+                                    ? "soon"
+                                    : ""
+                              }`}
+                            >
+                              {daysLeft < 0
+                                ? `${Math.abs(daysLeft)} days overdue`
+                                : daysLeft === 0
+                                  ? "Expected today"
+                                  : `${daysLeft} days left`}
+                            </span>
+                          </article>
+                        );
+                      })}
+                  </div>
+                )}
+              </section>
 
               {/* Crop Management */}
               <section className="actions-section" id="crop-management">
@@ -1460,7 +1431,7 @@ function App() {
                             disabled={!crop._id || cropLoading}
                           >
                             Delete Crop
-                            </button>
+                          </button>
 
                           {editingCropId === crop._id && (
                             <form
@@ -1588,7 +1559,11 @@ function App() {
                 <div className="action-filters">
                   <button
                     type="button"
-                    className={actionFilter === "all" ? "filter-button active" : "filter-button"}
+                    className={
+                      actionFilter === "all"
+                        ? "filter-button active"
+                        : "filter-button"
+                    }
                     onClick={() => setActionFilter("all")}
                   >
                     All ({actions.length})
@@ -1596,26 +1571,46 @@ function App() {
 
                   <button
                     type="button"
-                    className={actionFilter === "pending" ? "filter-button active" : "filter-button"}
+                    className={
+                      actionFilter === "pending"
+                        ? "filter-button active"
+                        : "filter-button"
+                    }
                     onClick={() => setActionFilter("pending")}
                   >
-                    Pending ({actions.filter((action) => action.status === "pending").length})
+                    Pending (
+                    {
+                      actions.filter(
+                        (action) => action.status === "pending"
+                      ).length
+                    }
+                    )
                   </button>
 
                   <button
                     type="button"
-                    className={actionFilter === "completed" ? "filter-button active" : "filter-button"}
+                    className={
+                      actionFilter === "completed"
+                        ? "filter-button active"
+                        : "filter-button"
+                    }
                     onClick={() => setActionFilter("completed")}
                   >
-                    Completed ({actions.filter((action) => action.status === "completed").length})
+                    Completed (
+                    {
+                      actions.filter(
+                        (action) => action.status === "completed"
+                      ).length
+                    }
+                    )
                   </button>
                 </div>
 
                 {filteredActions.length === 0 ? (
                   <p>
                     {actionFilter === "all"
-                    ? "No actions are currently available."
-                    : `No ${actionFilter} actions found.`}
+                      ? "No actions are currently available."
+                      : `No ${actionFilter} actions found.`}
                   </p>
                 ) : (
                   filteredActions.map((action, index) => {
