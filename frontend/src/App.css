@@ -2345,3 +2345,144 @@ textarea:focus-visible {
     min-height: 44px;
   }
 }
+/* ===== Farm Health Summary ===== */
+
+.farm-health-section {
+  background: #ffffff;
+  border: 1px solid #e8eee8;
+  border-radius: 18px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.farm-health-heading {
+  margin-bottom: 20px;
+}
+
+.farm-health-heading h2 {
+  font-size: 22px;
+  color: #1f3326;
+  margin: 6px 0;
+}
+
+.farm-health-heading p:last-child {
+  color: #718075;
+  font-size: 14px;
+}
+
+.farm-health-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.farm-health-card {
+  padding: 20px;
+  border-radius: 14px;
+  border: 1px solid #e8eee8;
+  background: #f8faf8;
+}
+
+.farm-health-card span {
+  display: block;
+  font-size: 14px;
+  color: #647267;
+  margin-bottom: 12px;
+}
+
+.farm-health-card strong {
+  display: block;
+  font-size: 30px;
+  color: #243b2b;
+  margin-bottom: 8px;
+}
+
+.farm-health-card p {
+  font-size: 12px;
+  color: #78847b;
+  line-height: 1.5;
+}
+
+.farm-health-card.healthy {
+  border-left: 4px solid #2e9b61;
+}
+
+.farm-health-card.attention {
+  border-left: 4px solid #e6a23c;
+}
+
+.farm-health-card.monitored {
+  border-left: 4px solid #4b91c8;
+}
+
+.farm-health-card.total {
+  border-left: 4px solid #849b70;
+}
+
+/* Responsive layout */
+@media (max-width: 900px) {
+  .farm-health-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .farm-health-section {
+    padding: 18px 14px;
+  }
+
+  .farm-health-grid {
+    grid-template-columns: 1fr;
+  }
+}
+/* ===== Crops Requiring Attention ===== */
+
+.crops-attention-list {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e8eee8;
+}
+
+.crops-attention-list h3 {
+  font-size: 17px;
+  color: #263b2d;
+  margin-bottom: 14px;
+}
+
+.crop-attention-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  background: #fff8ed;
+  border: 1px solid #f2dfc2;
+  border-radius: 10px;
+}
+
+.crop-attention-item strong {
+  color: #7c4b16;
+}
+
+.crop-attention-item span {
+  color: #896b48;
+  font-size: 13px;
+  text-align: right;
+}
+
+@media (max-width: 600px) {
+  .crop-attention-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .crop-attention-item span {
+    text-align: left;
+  }
+}
+.harvest-countdown.approaching {
+  background: #fff4d9;
+  color: #956300;
+  border: 1px solid #f0d99c;
+}

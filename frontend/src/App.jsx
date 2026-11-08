@@ -73,10 +73,32 @@ function App() {
   const [cropLoading, setCropLoading] = useState(false);
   const [cropError, setCropError] = useState("");
 
+
   // Crop monitoring
   const [cropMonitoring, setCropMonitoring] = useState({});
   const [monitoringLoadingId, setMonitoringLoadingId] = useState(null);
   const [monitoringErrors, setMonitoringErrors] = useState({});
+
+  // Farm Health Summary calculations
+  const healthyCrops = crops.filter(
+    (crop) =>
+      ["growing", "ready"].includes(crop.status) &&
+      (!crop.pests || crop.pests.length === 0) &&
+      (!crop.diseases || crop.diseases.length === 0)
+  );
+
+  const cropsNeedingAttention = crops.filter(
+    (crop) =>
+      crop.status !== "harvested" &&
+      ((crop.pests && crop.pests.length > 0) ||
+        (crop.diseases && crop.diseases.length > 0))
+  );
+
+  const harvestedCrops = crops.filter(
+    (crop) => crop.status === "harvested"
+  );
+
+  const totalMonitoredCrops = Object.keys(cropMonitoring).length;
 
   // Weather dashboard
   const [farmWeather, setFarmWeather] = useState(null);
@@ -910,6 +932,59 @@ function App() {
                 </article>
               </section>
 
+              {/* Farm Health Summary */}
+              <section className="farm-health-section">
+                <div className="farm-health-heading">
+                  <div>
+                    <p className="eyebrow">FARM INTELLIGENCE</p>
+                    <h2>Farm Health Summary</h2>
+                    <p>A quick look at the health of your crops.</p>
+                  </div>
+                </div>
+
+                <div className="farm-health-grid">
+                  <article className="farm-health-card healthy">
+                    <span>Healthy Crops</span>
+                    <strong>{healthyCrops.length}</strong>
+                    <p>No recorded pests or diseases</p>
+                  </article>
+
+                  <article className="farm-health-card attention">
+                    <span>Needs Attention</span>
+                    <strong>{cropsNeedingAttention.length}</strong>
+                    <p>Crops with recorded issues</p>
+                  </article>
+
+                  <article className="farm-health-card monitored">
+                    <span>Monitoring Results</span>
+                    <strong>{totalMonitoredCrops}</strong>
+                    <p>Crops checked during this session</p>
+                  </article>
+
+                  <article className="farm-health-card total">
+                    <span>Harvested Crops</span>
+                    <strong>{harvestedCrops.length}</strong>
+                    <p>Crops already harvested</p>
+                  </article>
+                </div>
+                {cropsNeedingAttention.length > 0 && (
+                <div className="crops-attention-list">
+                  <h3>Crops Requiring Attention</h3>
+
+                  {cropsNeedingAttention.map((crop) => (
+                    <div className="crop-attention-item" key={crop._id}>
+                      <strong>{crop.name}</strong>
+
+                      <span>
+                        {(crop.pests?.length || 0)} recorded pest(s) ·{" "}
+                        {(crop.diseases?.length || 0)} recorded disease(s)
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              </section>
+
               {/* What Needs Attention */}
               <section className="attention-panel">
                 <div className="attention-heading">
@@ -1051,7 +1126,14 @@ function App() {
                         const daysLeft = getDaysUntilHarvest(
                           crop.expectedHarvestDate
                         );
-
+                        const harvestStatus =
+                          daysLeft < 0
+                            ? "overdue"
+                            : daysLeft <= 7
+                              ? "soon"
+                              : daysLeft <= 14
+                                ? "approaching"
+                                : "normal";
                         return (
                           <article className="harvest-item" key={crop._id}>
                             <div className="harvest-crop-icon">🌾</div>
@@ -1066,20 +1148,16 @@ function App() {
                               </p>
                             </div>
 
-                            <span
-                              className={`harvest-countdown ${
-                                daysLeft < 0
-                                  ? "overdue"
-                                  : daysLeft <= 7
-                                    ? "soon"
-                                    : ""
-                              }`}
-                            >
+                            <span className={`harvest-countdown ${harvestStatus}`}>
                               {daysLeft < 0
                                 ? `${Math.abs(daysLeft)} days overdue`
                                 : daysLeft === 0
                                   ? "Expected today"
-                                  : `${daysLeft} days left`}
+                                  : daysLeft <= 7
+                                    ? `${daysLeft} days left`
+                                    : daysLeft <= 14
+                                      ? "Approaching harvest"
+                                      : `${daysLeft} days left`}
                             </span>
                           </article>
                         );
