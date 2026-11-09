@@ -1,5 +1,5 @@
 
-const API_BASE_URL = "http://192.168.2.101:3000/api";
+const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:3000/api`;
 
 // Prevent duplicate simultaneous weather requests.
 const pendingWeatherRequests = new Map();
