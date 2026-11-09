@@ -88,7 +88,7 @@ const getWeather = async (latitude, longitude) => {
           temperature: data.current_units.temperature_2m,
           humidity: data.current_units.relative_humidity_2m,
           precipitation: data.current_units.precipitation,
-          windSpeed: data.current_units.wind_speed,
+          windSpeed: data.current_units.wind_speed_10m,
         },
       };
 
