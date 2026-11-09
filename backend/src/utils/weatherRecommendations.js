@@ -100,7 +100,27 @@ const currentTimeId =
           : "Monitor soil moisture and check crops for signs of wilting.",
     });
   }
+   // 2. Current wind conditions.
+    const windSpeed = current.wind_speed_10m;
 
+    if (Number.isFinite(windSpeed) && windSpeed >= 30) {
+      const windSeverity = windSpeed >= 45 ? "high" : "medium";
+
+      const windEventId = currentTimeId
+        ? `wind:${currentTimeId}`
+        : null;
+
+      recommendations.push({
+        type: "wind_risk",
+        ...(windEventId && { weatherEventId: windEventId }),
+        severity: windSeverity,
+        message:
+          "Strong winds may damage crops or affect field activities.",
+        action:
+          "Inspect crops for damaged stems and loose supports. Secure vulnerable plants and postpone pesticide spraying if wind conditions could cause spray drift.",
+        windSpeed,
+      });
+    }
   // 2. Crop growth and harvest recommendations.
   for (const crop of crops) {
     const growth = getCropGrowthStage(crop);
