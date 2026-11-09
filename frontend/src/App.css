@@ -1604,6 +1604,25 @@ button:disabled {
   line-height: 1.6;
   margin: 0;
 }
+/* Better spacing inside weather recommendation cards */
+
+.weather-section .action-card h3 {
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.weather-section .action-card p {
+  margin-bottom: 10px;
+}
+
+.weather-section .action-card strong {
+  display: inline-block;
+  margin-right: 5px;
+}
+
+.weather-section .action-card p:last-child {
+  margin-bottom: 0;
+}
 
 /* Refresh weather button */
 
