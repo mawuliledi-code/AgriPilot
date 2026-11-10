@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import {
   login,
@@ -41,11 +42,47 @@ function getDaysUntilHarvest(harvestDate) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const harvest = new Date(`${harvestDate.slice(0, 10)}T00:00:00`);
+  const harvest = new Date(`${String(harvestDate).slice(0, 10)}T00:00:00`);
 
   return Math.ceil(
     (harvest.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
   );
+}
+
+function calculateFarmHealth(crops) {
+  if (!crops || crops.length === 0) {
+    return null;
+  }
+
+  let score = 100;
+
+  const activeCrops = crops.filter(
+    (crop) => getDashboardCropStatus(crop) !== "harvested"
+  );
+
+  const cropsWithIssues = activeCrops.filter(
+    (crop) =>
+      (crop.pests?.length || 0) > 0 ||
+      (crop.diseases?.length || 0) > 0
+  );
+
+  const overdueCrops = activeCrops.filter((crop) => {
+    const daysLeft = getDaysUntilHarvest(crop.expectedHarvestDate);
+    return daysLeft !== null && daysLeft < 0;
+  });
+
+  score -= cropsWithIssues.length * 15;
+  score -= overdueCrops.length * 10;
+
+  return Math.max(0, Math.min(100, score));
+}
+
+// Convert comma-separated text into a clean array.
+function convertToArray(value) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function App() {
@@ -59,12 +96,14 @@ function App() {
 
   // Dashboard page navigation
   const [activeSection, setActiveSection] = useState("overview");
-
   const [actionFilter, setActionFilter] = useState("all");
 
+  // Action history
   const [actionHistory, setActionHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+
+  // Recommended actions
   const [planLoading, setPlanLoading] = useState(false);
   const [completingAction, setCompletingAction] = useState(null);
 
@@ -74,28 +113,62 @@ function App() {
   const [cropError, setCropError] = useState("");
 
 
+  // Generate crop health alerts for the dashboard
+  const cropHealthAlerts = crops
+    .filter((crop) => crop.status !== "harvested")
+    .flatMap((crop) => {
+      const alerts = [];
+
+      if (Array.isArray(crop.pests) && crop.pests.length > 0) {
+        alerts.push({
+          id: `${crop._id}-pests`,
+          cropId: crop._id,
+          cropName: crop.name,
+          issue: "Recorded pests",
+          details: crop.pests
+        });
+      }
+
+      if (Array.isArray(crop.diseases) && crop.diseases.length > 0) {
+        alerts.push({
+          id: `${crop._id}-diseases`,
+          cropId: crop._id,
+          cropName: crop.name,
+          issue: "Recorded diseases",
+          details: crop.diseases
+        });
+      }
+
+      return alerts;
+    });
+
+
   // Crop monitoring
   const [cropMonitoring, setCropMonitoring] = useState({});
   const [monitoringLoadingId, setMonitoringLoadingId] = useState(null);
   const [monitoringErrors, setMonitoringErrors] = useState({});
 
   // Farm Health Summary calculations
+  const farmHealthScore = calculateFarmHealth(crops);
+
   const healthyCrops = crops.filter(
     (crop) =>
-      ["growing", "ready"].includes(crop.status) &&
+      ["growing", "ready"].includes(
+        getDashboardCropStatus(crop)
+      ) &&
       (!crop.pests || crop.pests.length === 0) &&
       (!crop.diseases || crop.diseases.length === 0)
   );
 
   const cropsNeedingAttention = crops.filter(
     (crop) =>
-      crop.status !== "harvested" &&
+      getDashboardCropStatus(crop) !== "harvested" &&
       ((crop.pests && crop.pests.length > 0) ||
         (crop.diseases && crop.diseases.length > 0))
   );
 
   const harvestedCrops = crops.filter(
-    (crop) => crop.status === "harvested"
+    (crop) => getDashboardCropStatus(crop) === "harvested"
   );
 
   const totalMonitoredCrops = Object.keys(cropMonitoring).length;
@@ -111,6 +184,11 @@ function App() {
   const [editHarvestDate, setEditHarvestDate] = useState("");
   const [editCropStatus, setEditCropStatus] = useState("planned");
   const [editCropNotes, setEditCropNotes] = useState("");
+
+  // NEW: Pest and disease edit fields
+  const [editCropPests, setEditCropPests] = useState("");
+  const [editCropDiseases, setEditCropDiseases] = useState("");
+
   const [savingCropChanges, setSavingCropChanges] = useState(false);
   const [editCropError, setEditCropError] = useState("");
   const [editCropSuccess, setEditCropSuccess] = useState("");
@@ -226,7 +304,6 @@ function App() {
       }
 
       try {
-        // 1. Retrieve the user's farms
         const farmData = await getMyFarms(token);
 
         if (!active) return;
@@ -240,11 +317,9 @@ function App() {
           return;
         }
 
-        // 2. Select the first farm
         const selectedFarmId = farms[0]._id;
         setFarmId(selectedFarmId);
 
-        // 3. Load farm-related information
         const plan = await getActionPlan(selectedFarmId, token);
 
         if (!active) return;
@@ -258,7 +333,6 @@ function App() {
         ]);
       } catch (err) {
         if (!active) return;
-
         setError(err.message || "Could not restore your session.");
       } finally {
         if (active) setCheckingSession(false);
@@ -330,6 +404,21 @@ function App() {
     }
   }
 
+  // Close the monitoring panel without deleting stored information
+  function handleCloseMonitoring(cropId) {
+    setCropMonitoring((previous) => {
+      const updated = { ...previous };
+      delete updated[cropId];
+      return updated;
+    });
+
+    setMonitoringErrors((previous) => {
+      const updated = { ...previous };
+      delete updated[cropId];
+      return updated;
+    });
+  }
+
   // Sign in
   async function handleSubmit(event) {
     event.preventDefault();
@@ -344,10 +433,8 @@ function App() {
       }
 
       const token = data.token;
-
       sessionStorage.setItem("agripilotToken", token);
 
-      // 1. Retrieve the user's farms
       const farmData = await getMyFarms(token);
       const farms = farmData.farms || [];
 
@@ -356,15 +443,12 @@ function App() {
         throw new Error("No farm found. Please add a farm first.");
       }
 
-      // 2. Select the first farm
       const selectedFarmId = farms[0]._id;
       setFarmId(selectedFarmId);
 
-      // 3. Load the action plan
       const plan = await getActionPlan(selectedFarmId, token);
       setActionPlan(plan);
 
-      // 4. Load the remaining dashboard data
       await Promise.all([
         loadActionHistory(token, selectedFarmId),
         loadCrops(token),
@@ -456,6 +540,17 @@ function App() {
 
     setEditCropStatus(crop.status || "planned");
     setEditCropNotes(crop.notes || "");
+
+    // NEW: Load existing pests into the edit form
+    setEditCropPests(
+      Array.isArray(crop.pests) ? crop.pests.join(", ") : ""
+    );
+
+    // NEW: Load existing diseases into the edit form
+    setEditCropDiseases(
+      Array.isArray(crop.diseases) ? crop.diseases.join(", ") : ""
+    );
+
     setEditCropError("");
     setEditCropSuccess("");
   }
@@ -490,6 +585,10 @@ function App() {
 
     const cropId = editingCropId;
 
+    // NEW: Convert pests and diseases into arrays
+    const pestsArray = convertToArray(editCropPests);
+    const diseasesArray = convertToArray(editCropDiseases);
+
     try {
       setSavingCropChanges(true);
       setEditCropError("");
@@ -500,6 +599,10 @@ function App() {
         expectedHarvestDate: editHarvestDate,
         status: editCropStatus,
         notes: editCropNotes.trim(),
+
+        // NEW: Send both arrays to the backend
+        pests: pestsArray,
+        diseases: diseasesArray,
       });
 
       await loadCrops(token);
@@ -581,7 +684,6 @@ function App() {
     if (outcome === null || !outcome.trim()) return;
 
     const notes = window.prompt("Additional notes (optional):");
-
     if (notes === null) return;
 
     if (!action.type || !action.action) {
@@ -597,11 +699,9 @@ function App() {
     };
 
     if (action.cropId) completionData.cropId = action.cropId;
-
     if (action.observationId) {
       completionData.observationId = action.observationId;
     }
-
     if (action.weatherEventId) {
       completionData.weatherEventId = action.weatherEventId;
     }
@@ -631,6 +731,7 @@ function App() {
   // Log out
   function handleLogout() {
     sessionStorage.removeItem("agripilotToken");
+
     setActionPlan(null);
     setActionHistory([]);
     setCrops([]);
@@ -647,6 +748,15 @@ function App() {
     setCropFormSuccess("");
     setShowCropForm(false);
     setEditingCropId(null);
+
+    // NEW: Clear edit form fields
+    setEditCropPests("");
+    setEditCropDiseases("");
+    setEditCropNotes("");
+    setEditPlantingDate("");
+    setEditHarvestDate("");
+    setEditCropStatus("planned");
+
     setEditCropError("");
     setEditCropSuccess("");
     setActiveSection("overview");
@@ -715,6 +825,19 @@ function App() {
               onClick={() => setActiveSection("overview")}
             >
               <span>🌾</span> Crop Management
+            </a>
+
+            <a
+              href="#crop-health-alerts"
+              className="nav-link"
+              onClick={() => setActiveSection("overview")}
+            >
+              <span>⚠️</span> Crop Health Alerts
+              {cropHealthAlerts.length > 0 && (
+                <span className="alert-count">
+                  {cropHealthAlerts.length}
+                </span>
+              )}
             </a>
 
             <a
@@ -902,6 +1025,38 @@ function App() {
           ) : (
             /* Normal dashboard page */
             <>
+              {/* FARM HEALTH SCORE */}
+              <section className="farm-health-score-card">
+                <div className="farm-health-score-content">
+                  <p className="eyebrow">FARM PERFORMANCE</p>
+                  <h2>Farm Health Score</h2>
+                  <p>
+                    An overview of your farm's current crop health.
+                  </p>
+
+                  <div className="farm-health-score-track">
+                    <div
+                      className={`farm-health-score-fill ${
+                        farmHealthScore < 50
+                          ? "low"
+                          : farmHealthScore < 75
+                            ? "medium"
+                            : ""
+                      }`}
+                      style={{
+                        width: `${farmHealthScore ?? 0}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="farm-health-score-value">
+                  {farmHealthScore === null ? "--" : farmHealthScore}
+                  <span> / 100</span>
+                </div>
+              </section>
+
+              {/* Dashboard statistics */}
               <section className="stats-grid">
                 <article className="stat-card">
                   <span>Total crops</span>
@@ -911,18 +1066,24 @@ function App() {
                 <article className="stat-card">
                   <span>Growing crops</span>
                   <strong>
-                    {crops.filter(
-                      (crop) => getDashboardCropStatus(crop) === "growing"
-                    ).length}
+                    {
+                      crops.filter(
+                        (crop) =>
+                          getDashboardCropStatus(crop) === "growing"
+                      ).length
+                    }
                   </strong>
                 </article>
 
                 <article className="stat-card">
                   <span>Ready for harvest</span>
                   <strong>
-                    {crops.filter(
-                      (crop) => getDashboardCropStatus(crop) === "ready"
-                    ).length}
+                    {
+                      crops.filter(
+                        (crop) =>
+                          getDashboardCropStatus(crop) === "ready"
+                      ).length
+                    }
                   </strong>
                 </article>
 
@@ -967,22 +1128,23 @@ function App() {
                     <p>Crops already harvested</p>
                   </article>
                 </div>
+
                 {cropsNeedingAttention.length > 0 && (
-                <div className="crops-attention-list">
-                  <h3>Crops Requiring Attention</h3>
+                  <div className="crops-attention-list">
+                    <h3>Crops Requiring Attention</h3>
 
-                  {cropsNeedingAttention.map((crop) => (
-                    <div className="crop-attention-item" key={crop._id}>
-                      <strong>{crop.name}</strong>
+                    {cropsNeedingAttention.map((crop) => (
+                      <div className="crop-attention-item" key={crop._id}>
+                        <strong>{crop.name}</strong>
 
-                      <span>
-                        {(crop.pests?.length || 0)} recorded pest(s) ·{" "}
-                        {(crop.diseases?.length || 0)} recorded disease(s)
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+                        <span>
+                          {crop.pests?.length || 0} recorded pest(s) ·{" "}
+                          {crop.diseases?.length || 0} recorded disease(s)
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </section>
 
               {/* What Needs Attention */}
@@ -1052,7 +1214,7 @@ function App() {
                     <p className="eyebrow">CROP PLANNING</p>
                     <h2>Your Crops Progress</h2>
                     <p>
-                      Track crops planned for planting and crop already harvested.
+                      Track crops planned for planting and crops already harvested.
                     </p>
                   </div>
 
@@ -1067,7 +1229,8 @@ function App() {
                     <strong>
                       {
                         crops.filter(
-                          (crop) => getDashboardCropStatus(crop) === "planned"
+                          (crop) =>
+                            getDashboardCropStatus(crop) === "planned"
                         ).length
                       }
                     </strong>
@@ -1076,13 +1239,7 @@ function App() {
 
                   <article className="crop-stat-card">
                     <span>Harvested crops</span>
-                    <strong>
-                      {
-                        crops.filter(
-                          (crop) => getDashboardCropStatus(crop) === "harvested"
-                        ).length
-                      }
-                    </strong>
+                    <strong>{harvestedCrops.length}</strong>
                     <p>Crops already harvested</p>
                   </article>
                 </div>
@@ -1126,6 +1283,7 @@ function App() {
                         const daysLeft = getDaysUntilHarvest(
                           crop.expectedHarvestDate
                         );
+
                         const harvestStatus =
                           daysLeft < 0
                             ? "overdue"
@@ -1134,6 +1292,7 @@ function App() {
                               : daysLeft <= 14
                                 ? "approaching"
                                 : "normal";
+
                         return (
                           <article className="harvest-item" key={crop._id}>
                             <div className="harvest-crop-icon">🌾</div>
@@ -1148,7 +1307,9 @@ function App() {
                               </p>
                             </div>
 
-                            <span className={`harvest-countdown ${harvestStatus}`}>
+                            <span
+                              className={`harvest-countdown ${harvestStatus}`}
+                            >
                               {daysLeft < 0
                                 ? `${Math.abs(daysLeft)} days overdue`
                                 : daysLeft === 0
@@ -1383,7 +1544,20 @@ function App() {
 
                           {monitoring && (
                             <div className="crop-monitoring-panel">
-                              <h4>Crop Monitoring</h4>
+                              {/* NEW: Monitoring heading and close button */}
+                              <div className="monitoring-panel-header">
+                                <h4>Crop Monitoring</h4>
+
+                                <button
+                                  type="button"
+                                  className="refresh-button"
+                                  onClick={() =>
+                                    handleCloseMonitoring(crop._id)
+                                  }
+                                >
+                                  Close Monitoring
+                                </button>
+                              </div>
 
                               <p>
                                 <strong>Status:</strong>{" "}
@@ -1557,6 +1731,38 @@ function App() {
                                 </select>
                               </label>
 
+                              {/* NEW: Pest input */}
+                              <label>
+                                Pests (optional)
+                                <input
+                                  type="text"
+                                  value={editCropPests}
+                                  onChange={(event) =>
+                                    setEditCropPests(event.target.value)
+                                  }
+                                  placeholder="Example: Aphids, Caterpillars"
+                                />
+                                <small>
+                                  Separate multiple pests with commas.
+                                </small>
+                              </label>
+
+                              {/* NEW: Disease input */}
+                              <label>
+                                Diseases (optional)
+                                <input
+                                  type="text"
+                                  value={editCropDiseases}
+                                  onChange={(event) =>
+                                    setEditCropDiseases(event.target.value)
+                                  }
+                                  placeholder="Example: Leaf spot, Blight"
+                                />
+                                <small>
+                                  Separate multiple diseases with commas.
+                                </small>
+                              </label>
+
                               <label>
                                 Notes
                                 <textarea
@@ -1599,6 +1805,8 @@ function App() {
                                   setEditingCropId(null);
                                   setEditCropError("");
                                   setEditCropSuccess("");
+                                  setEditCropPests("");
+                                  setEditCropDiseases("");
                                 }}
                               >
                                 Cancel
@@ -1624,6 +1832,37 @@ function App() {
                   >
                     Refresh crops
                   </button>
+                )}
+              </section>
+
+              {/* Crop Health Alerts */}
+              <section className="crop-health-alerts" id="crop-health-alerts">
+                <h2>Crop Health Alerts</h2>
+
+                {cropHealthAlerts.length === 0 ? (
+                  <p>No crop health issues have been recorded.</p>
+                ) : (
+                  <div className="crop-alert-list">
+                    {cropHealthAlerts.map((alert) => (
+                      <article className="crop-alert-card" key={alert.id}>
+                        <div className="crop-alert-header">
+                          <h3>{alert.cropName}</h3>
+                          <span className="crop-alert-label">
+                            {alert.issue}
+                          </span>
+                        </div>
+
+                        <p>
+                          <strong>Recorded issue:</strong>{" "}
+                          {alert.details.join(", ")}
+                        </p>
+
+                        <p className="crop-alert-note">
+                          Please inspect this crop and review the recorded issue.
+                        </p>
+                      </article>
+                    ))}
+                  </div>
                 )}
               </section>
 
