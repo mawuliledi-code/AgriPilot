@@ -117,6 +117,7 @@ function App() {
   const [actionHistory, setActionHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [showAllHistory, setShowAllHistory] = useState(false);
 
   // Recommended actions
   const [planLoading, setPlanLoading] = useState(false);
@@ -2368,7 +2369,9 @@ function App() {
                 ) : actionHistory.length === 0 ? (
                   <p>No completed actions recorded yet.</p>
                 ) : (
-                  actionHistory.map((record, index) => (
+                  actionHistory
+                    .slice(0, showAllHistory ? actionHistory.length : 5)
+                    .map((record, index) => (
                     <article
                       className="action-card history-card"
                       key={record._id || index}
@@ -2413,6 +2416,18 @@ function App() {
                       )}
                     </article>
                   ))
+                )}
+
+                {actionHistory.length > 5 && (
+                  <button
+                    type="button"
+                    className="refresh-button"
+                    onClick={() => setShowAllHistory((current) => !current)}
+                  >
+                    {showAllHistory
+                      ? "Show less"
+                      : `View all ${actionHistory.length} actions`}
+                  </button>
                 )}
 
                 <button
