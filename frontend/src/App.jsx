@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import {
   login,
+  register,
+  createFarm,
   getMyFarms,
   getActionPlan,
   completeAction,
@@ -90,9 +92,22 @@ function App() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [actionPlan, setActionPlan] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [farmId, setFarmId] = useState("");
+  const [showRegister, setShowRegister] = useState(false);
+  const [name, setName] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showFarmSetup, setShowFarmSetup] = useState(false);
+  const [farmName, setFarmName] = useState("");
+  const [farmCity, setFarmCity] = useState("");
+  const [farmCountry, setFarmCountry] = useState("Ghana");
+  const [farmLatitude, setFarmLatitude] = useState("");
+  const [farmLongitude, setFarmLongitude] = useState("");
+  const [farmSize, setFarmSize] = useState("");
+  const [farmCrops, setFarmCrops] = useState("");
+  
 
   // Dashboard page navigation
   const [activeSection, setActiveSection] = useState("overview");
@@ -111,36 +126,83 @@ function App() {
   const [crops, setCrops] = useState([]);
   const [cropLoading, setCropLoading] = useState(false);
   const [cropError, setCropError] = useState("");
+  const [alertFilter, setAlertFilter] = useState("all");
 
 
-  // Generate crop health alerts for the dashboard
+// Generate crop health alerts for the dashboard
   const cropHealthAlerts = crops
     .filter((crop) => crop.status !== "harvested")
     .flatMap((crop) => {
       const alerts = [];
 
-      if (Array.isArray(crop.pests) && crop.pests.length > 0) {
+      const pests = Array.isArray(crop.pests) ? crop.pests : [];
+      const diseases = Array.isArray(crop.diseases)
+        ? crop.diseases
+        : [];
+
+      // Combine pest and disease alerts into one card per crop
+      if (pests.length > 0 || diseases.length > 0) {
         alerts.push({
-          id: `${crop._id}-pests`,
+          id: `${crop._id}-attention`,
           cropId: crop._id,
           cropName: crop.name,
-          issue: "Recorded pests",
-          details: crop.pests
+          plantingDate: crop.plantingDate, 
+          issue: "Recorded issues",
+          category: "attention",
+          details: [
+            ...pests.map((pest) => `Pest: ${pest}`),
+            ...diseases.map((disease) => `Disease: ${disease}`)
+          ]
+        });
+      }
+      // No recorded pest or disease issues
+      if (pests.length === 0 && diseases.length === 0) {
+        alerts.push({
+          id: `${crop._id}-healthy`,
+          cropId: crop._id,
+          cropName: crop.name,
+          plantingDate: crop.plantingDate, 
+          issue: "No recorded issues",
+          category: "healthy",
+          details: []
         });
       }
 
-      if (Array.isArray(crop.diseases) && crop.diseases.length > 0) {
-        alerts.push({
-          id: `${crop._id}-diseases`,
-          cropId: crop._id,
-          cropName: crop.name,
-          issue: "Recorded diseases",
-          details: crop.diseases
-        });
+      // Harvest warning: expected within 14 days
+      if (crop.expectedHarvestDate) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const harvestDate = new Date(crop.expectedHarvestDate);
+        harvestDate.setHours(0, 0, 0, 0);
+
+        const daysUntilHarvest = Math.ceil(
+          (harvestDate - today) / (1000 * 60 * 60 * 24)
+        );
+
+        if (daysUntilHarvest >= 0 && daysUntilHarvest <= 14) {
+          alerts.push({
+            id: `${crop._id}-harvest`,
+            cropId: crop._id,
+            cropName: crop.name,
+            plantingDate: crop.plantingDate, 
+            issue: "Harvest approaching",
+            category: "harvest",
+            details: [`Expected in ${daysUntilHarvest} days`]
+          });
+        }
       }
 
       return alerts;
     });
+
+    // Filter crop health alerts
+  const filteredCropHealthAlerts =
+    alertFilter === "all"
+      ? cropHealthAlerts
+      : cropHealthAlerts.filter(
+          (alert) => alert.category === alertFilter
+        );
 
 
   // Crop monitoring
@@ -403,6 +465,24 @@ function App() {
       );
     }
   }
+  function handleViewAlertCrop(alert) {
+    const selectedCrop = crops.find(
+      (crop) => crop._id === alert.cropId
+    );
+
+    if (!selectedCrop) {
+      setError("This crop could not be found. Please refresh your crops.");
+      return;
+    }
+
+    setActiveSection("overview");
+
+    // Scroll to the selected crop immediately
+    window.location.hash = `crop-${selectedCrop._id}`;
+
+    // Load monitoring data without delaying navigation
+    handleViewMonitoring(selectedCrop);
+  }
 
   // Close the monitoring panel without deleting stored information
   function handleCloseMonitoring(cropId) {
@@ -435,15 +515,19 @@ function App() {
       const token = data.token;
       sessionStorage.setItem("agripilotToken", token);
 
-      const farmData = await getMyFarms(token);
-      const farms = farmData.farms || [];
+     const farmData = await getMyFarms(token);
+    const farms = farmData.farms || [];
 
-      if (farms.length === 0) {
-        setFarmId("");
-        throw new Error("No farm found. Please add a farm first.");
-      }
+    if (farms.length === 0) {
+      setFarmId("");
+      setShowFarmSetup(true);
+      setError("");
+      return;
+    }
 
-      const selectedFarmId = farms[0]._id;
+    setShowFarmSetup(false);
+
+    const selectedFarmId = farms[0]._id;
       setFarmId(selectedFarmId);
 
       const plan = await getActionPlan(selectedFarmId, token);
@@ -459,6 +543,108 @@ function App() {
     } finally {
       setLoading(false);
       setCheckingSession(false);
+    }
+  }
+
+    // Create the farmer's first farm
+  async function handleCreateFarm(event) {
+    event.preventDefault();
+    setError("");
+
+    if (!farmName.trim() || !farmCity.trim() || !farmCountry.trim() || !farmSize) {
+  setError("Please complete all required farm details.");
+  return;
+}
+
+    const latitude = Number(farmLatitude);
+    const longitude = Number(farmLongitude);
+
+    if (
+      farmLatitude.trim() === "" ||
+      farmLongitude.trim() === "" ||
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      setError("Please enter valid farm latitude and longitude.");
+      return;
+    }
+
+    const token = sessionStorage.getItem("agripilotToken");
+
+    setLoading(true);
+
+    try {
+      const farmData = await createFarm(token, {
+        name: farmName.trim(),
+        location: {
+          city: farmCity.trim(),
+          country: farmCountry.trim(),
+        },
+        latitude,
+        longitude,
+        size: Number(farmSize),
+        crops: farmCrops
+          .split(",")
+          .map((crop) => crop.trim())
+          .filter(Boolean),
+      });
+
+      const newFarmId = farmData.farm._id;
+      setFarmId(newFarmId);
+
+      const plan = await getActionPlan(newFarmId, token);
+      setActionPlan(plan);
+
+      await Promise.all([
+        loadActionHistory(token, newFarmId),
+        loadCrops(token),
+        loadFarmWeather(token, newFarmId),
+      ]);
+
+      setShowFarmSetup(false);
+    } catch (err) {
+      setError(err.message || "Could not create your farm.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Register a new farmer
+  async function handleRegister(event) {
+    event.preventDefault();
+    setError("");
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await register(name.trim(), email.trim(), password);
+
+      setShowRegister(false);
+      setName("");
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
+      setError("");
+      
+      setSuccessMessage("Account created successfully! You can now sign in.");
+    } catch (err) {
+      setError(err.message || "Registration failed.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -1470,6 +1656,7 @@ function App() {
 
                       return (
                         <article
+                          id={`crop-${crop._id}`}
                           className="action-card crop-card"
                           key={crop._id || index}
                         >
@@ -1545,18 +1732,31 @@ function App() {
                           {monitoring && (
                             <div className="crop-monitoring-panel">
                               {/* NEW: Monitoring heading and close button */}
-                              <div className="monitoring-panel-header">
+                             <div className="monitoring-panel-header">
                                 <h4>Crop Monitoring</h4>
 
-                                <button
-                                  type="button"
-                                  className="refresh-button"
-                                  onClick={() =>
-                                    handleCloseMonitoring(crop._id)
-                                  }
-                                >
-                                  Close Monitoring
-                                </button>
+                                <div className="monitoring-panel-actions">
+                                  <button
+                                    type="button"
+                                    className="refresh-button"
+                                    onClick={() => {
+                                      document.getElementById("crop-health-alerts")?.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "start"
+                                      });
+                                    }}
+                                  >
+                                    ← Back to Crop Health Alerts
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="refresh-button"
+                                    onClick={() => handleCloseMonitoring(crop._id)}
+                                  >
+                                    Close Monitoring
+                                  </button>
+                                </div>
                               </div>
 
                               <p>
@@ -1839,27 +2039,102 @@ function App() {
               <section className="crop-health-alerts" id="crop-health-alerts">
                 <h2>Crop Health Alerts</h2>
 
-                {cropHealthAlerts.length === 0 ? (
+                <div className="alert-filters">
+                  <button
+                    type="button"
+                    className={alertFilter === "all" ? "active" : ""}
+                    onClick={() => setAlertFilter("all")}
+                  >
+                    All
+                  </button>
+
+                  <button
+                    type="button"
+                    className={alertFilter === "attention" ? "active" : ""}
+                    onClick={() => setAlertFilter("attention")}
+                  >
+                    Needs Attention
+                  </button>
+
+                  <button
+                    type="button"
+                    className={alertFilter === "harvest" ? "active" : ""}
+                    onClick={() => setAlertFilter("harvest")}
+                  >
+                    Harvest Warning
+                  </button>
+
+                  <button
+                    type="button"
+                    className={alertFilter === "healthy" ? "active" : ""}
+                    onClick={() => setAlertFilter("healthy")}
+                  >
+                    No Recorded Issues
+                  </button>
+                </div>
+
+                {filteredCropHealthAlerts.length === 0 ? (
                   <p>No crop health issues have been recorded.</p>
                 ) : (
                   <div className="crop-alert-list">
-                    {cropHealthAlerts.map((alert) => (
+                    {filteredCropHealthAlerts.map((alert) => (
                       <article className="crop-alert-card" key={alert.id}>
                         <div className="crop-alert-header">
                           <h3>{alert.cropName}</h3>
-                          <span className="crop-alert-label">
-                            {alert.issue}
+
+                          {alert.plantingDate && (
+                            <p className="crop-planting-date">
+                              Planted:{" "}
+                              {new Date(alert.plantingDate).toLocaleDateString("en-GB")}
+                            </p>
+                          )}
+
+                          <span
+                            className={`crop-alert-label ${alert.category}`}
+                          >
+                            {alert.category === "attention"
+                              ? "Needs attention"
+                              : alert.category === "healthy"
+                                ? "No recorded issues"
+                                : "Harvest warning"}
                           </span>
                         </div>
 
                         <p>
-                          <strong>Recorded issue:</strong>{" "}
-                          {alert.details.join(", ")}
+                          <strong>
+                            {alert.category === "attention"
+                              ? "Recorded issues:"
+                              : alert.category === "harvest"
+                                ? "Harvest information:"
+                                : "Crop status:"}
+                          </strong>{" "}
+                          {alert.details.length > 0
+                            ? alert.details.join(", ")
+                            : "No pests or diseases recorded."}
                         </p>
 
-                        <p className="crop-alert-note">
-                          Please inspect this crop and review the recorded issue.
-                        </p>
+                        {/* View Crop Details button */}
+                        <button
+                          type="button"
+                          className="refresh-button"
+                          onClick={() => handleViewAlertCrop(alert)}
+                          disabled={
+                            !alert.cropId ||
+                            monitoringLoadingId === alert.cropId
+                          }
+                        >
+                          {monitoringLoadingId === alert.cropId
+                            ? "Loading monitoring..."
+                            : "View Crop Details"}
+                        </button>
+
+                        {monitoringErrors[alert.cropId] && (
+                          <p className="error-message" role="alert">
+                            {monitoringErrors[alert.cropId]}
+                          </p>
+                        )}
+
+                        
                       </article>
                     ))}
                   </div>
@@ -2156,6 +2431,11 @@ function App() {
                 </button>
               </section>
 
+              {successMessage && (
+                <p className="success-message" role="status">
+                  {successMessage}
+                </p>
+              )}
               {error && (
                 <p className="error-message" role="alert">
                   {error}
@@ -2168,53 +2448,250 @@ function App() {
     );
   }
 
-  // Login page
+  
   return (
     <main className="login-page">
       <section className="login-card">
         <p className="eyebrow">AGRIPILOT</p>
 
-        <h1>Welcome to AgriPilot</h1>
-
-        <p className="login-subtitle">
-          Sign in to manage your farm and view recommended actions.
-        </p>
-
-        <form onSubmit={handleSubmit}>
-          <label htmlFor="email">Email address</label>
-
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="Enter your email"
-            autoComplete="username"
-            required
-          />
-
-          <label htmlFor="password">Password</label>
-
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="Enter your password"
-            autoComplete="current-password"
-            required
-          />
-
-          {error && (
-            <p className="error-message" role="alert">
-              {error}
+        {showFarmSetup ? (
+          <>
+            <h1>Set up your farm</h1>
+            <p className="login-subtitle">
+              Tell us about your farm to get started with AgriPilot.
             </p>
-          )}
 
-          <button type="submit" disabled={loading}>
-            {loading ? "Signing in..." : "Sign in"}
-          </button>
-        </form>
+            <form onSubmit={handleCreateFarm}>
+              <label htmlFor="farm-name">Farm name</label>
+              <input
+                id="farm-name"
+                type="text"
+                value={farmName}
+                onChange={(event) => setFarmName(event.target.value)}
+                placeholder="e.g. Mawuli Farm"
+                required
+              />
+
+              <label htmlFor="farm-city">City</label>
+              <input
+                id="farm-city"
+                type="text"
+                value={farmCity}
+                onChange={(event) => setFarmCity(event.target.value)}
+                placeholder="e.g. Accra"
+                required
+              />
+
+              <label htmlFor="farm-country">Country</label>
+              <input
+                id="farm-country"
+                type="text"
+                value={farmCountry}
+                onChange={(event) => setFarmCountry(event.target.value)}
+                placeholder="e.g. Ghana"
+                required
+              />
+              <label htmlFor="farm-latitude">Latitude</label>
+              <input
+                id="farm-latitude"
+                type="number"
+                step="any"
+                value={farmLatitude}
+                onChange={(event) => setFarmLatitude(event.target.value)}
+                placeholder="e.g. 5.6037"
+                required
+              />
+
+              <label htmlFor="farm-longitude">Longitude</label>
+              <input
+                id="farm-longitude"
+                type="number"
+                step="any"
+                value={farmLongitude}
+                onChange={(event) => setFarmLongitude(event.target.value)}
+                placeholder="e.g. -0.1870"
+                required
+              />
+
+              <label htmlFor="farm-size">Farm size (hectares)</label>
+              <input
+                id="farm-size"
+                type="number"
+                min="0.01"
+                step="any"
+                value={farmSize}
+                onChange={(event) => setFarmSize(event.target.value)}
+                placeholder="e.g. 5"
+                required
+              />
+
+              <label htmlFor="farm-crops">Crops grown</label>
+              <input
+                id="farm-crops"
+                type="text"
+                value={farmCrops}
+                onChange={(event) => setFarmCrops(event.target.value)}
+                placeholder="e.g. Tomatoes, maize, carrots"
+              />
+
+              <p className="login-subtitle">
+                Separate crop names with commas.
+              </p>
+
+              {error && (
+                <p className="error-message" role="alert">
+                  {error}
+                </p>
+              )}
+
+              <button type="submit" disabled={loading}>
+                {loading ? "Creating your farm..." : "Create my farm"}
+              </button>
+            </form>
+          </>
+        ) : showRegister ? (
+          <>
+            <h1>Create your account</h1>
+            <p className="login-subtitle">
+              Register to start managing your farm with AgriPilot.
+            </p>
+
+            <form onSubmit={handleRegister}>
+              <label htmlFor="name">Full name</label>
+              <input
+                id="name"
+                type="text"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Enter your full name"
+                autoComplete="name"
+                required
+              />
+
+              <label htmlFor="register-email">Email address</label>
+              <input
+                id="register-email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="Enter your email"
+                autoComplete="email"
+                required
+              />
+
+              <label htmlFor="register-password">Password</label>
+              <input
+                id="register-password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="At least 8 characters"
+                autoComplete="new-password"
+                minLength={8}
+                required
+              />
+
+              <label htmlFor="confirm-password">Confirm password</label>
+              <input
+                id="confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                placeholder="Confirm your password"
+                autoComplete="new-password"
+                required
+              />
+
+              {error && (
+                <p className="error-message" role="alert">
+                  {error}
+                </p>
+              )}
+
+              <button type="submit" disabled={loading}>
+                {loading ? "Creating account..." : "Create account"}
+              </button>
+            </form>
+
+            <p className="login-subtitle">
+              Already have an account?{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRegister(false);
+                  setError("");
+                  setPassword("");
+                  setConfirmPassword("");
+                }}
+              >
+                Sign in
+              </button>
+            </p>
+          </>
+        ) : (
+          <>
+            <h1>Welcome to AgriPilot</h1>
+            <p className="login-subtitle">
+              Sign in to manage your farm and view recommended actions.
+            </p>
+
+            <form onSubmit={handleSubmit}>
+              <label htmlFor="email">Email address</label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="Enter your email"
+                autoComplete="username"
+                required
+              />
+
+              <label htmlFor="password">Password</label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Enter your password"
+                autoComplete="current-password"
+                required
+              />
+
+              {successMessage && (
+                <p className="success-message" role="status">
+                  {successMessage}
+                </p>
+              )}
+
+              {error && (
+                <p className="error-message" role="alert">
+                  {error}
+                </p>
+              )}
+
+              <button type="submit" disabled={loading}>
+                {loading ? "Signing in..." : "Sign in"}
+              </button>
+            </form>
+
+            <p className="login-subtitle">
+              New to AgriPilot?{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRegister(true);
+                  setError("");
+                  setSuccessMessage("");
+                  setPassword("");
+                  setConfirmPassword("");
+                }}
+              >
+                Create an account
+              </button>
+            </p>
+          </>
+        )}
       </section>
     </main>
   );

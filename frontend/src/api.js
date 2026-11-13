@@ -41,6 +41,20 @@ export async function login(email, password) {
 }
 
 
+export async function register(name, email, password) {
+  const response = await fetch(`${API_BASE_URL}/auth/register`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ name, email, password }),
+  });
+
+  return readResponse(response, "Registration failed");
+}
+
+
 // ===== Farm Management =====
 
 // Get all farms belonging to the logged-in farmer.
@@ -59,6 +73,25 @@ export async function getMyFarms(token) {
   });
 
   return readResponse(response, "Could not load your farms");
+}
+
+// Create a new farm for the logged-in farmer.
+export async function createFarm(token, farmData) {
+  if (!token) {
+    throw new Error("Your session has expired. Please log in again.");
+  }
+
+  const response = await fetch(`${API_BASE_URL}/farms`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+    body: JSON.stringify(farmData),
+  });
+
+  return readResponse(response, "Could not create farm");
 }
 
 // ===== Action Planner =====
