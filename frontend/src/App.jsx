@@ -2379,7 +2379,9 @@ function App() {
                       <div className="action-card-header">
                         <div>
                           <span className="action-category">
-                            {record.actionType || "Farm action"}
+                            {(record.actionType || "Farm action")
+                              .replace(/_/g, " ")
+                              .replace(/\b\w/g, (letter) => letter.toUpperCase())}
                           </span>
 
                           <h3>
