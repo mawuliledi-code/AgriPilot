@@ -157,14 +157,16 @@ function App() {
         });
       }
       // No recorded pest or disease issues
-      if (pests.length === 0 && diseases.length === 0) {
+     if (pests.length === 0 && diseases.length === 0) {
         alerts.push({
           id: `${crop._id}-healthy`,
           cropId: crop._id,
           cropName: crop.name,
-          plantingDate: crop.plantingDate, 
+          plantingDate: crop.plantingDate,
           issue: "No recorded issues",
           category: "healthy",
+          recommendedAction:
+            "Continue routine crop monitoring to keep the crop healthy.",
           details: []
         });
       }
@@ -189,6 +191,8 @@ function App() {
             plantingDate: crop.plantingDate, 
             issue: "Harvest approaching",
             category: "harvest",
+            recommendedAction:
+              "Check crop maturity and prepare for harvesting.",
             details: [`Expected in ${daysUntilHarvest} days`]
           });
         }
@@ -2113,6 +2117,12 @@ function App() {
                             ? alert.details.join(", ")
                             : "No pests or diseases recorded."}
                         </p>
+                        {alert.recommendedAction && (
+                          <div className="action-info">
+                            <strong>Recommended next action:</strong>
+                            <p>{alert.recommendedAction}</p>
+                          </div>
+                        )}
 
                         {/* View Crop Details button */}
                         <button

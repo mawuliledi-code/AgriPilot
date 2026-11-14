@@ -1331,4 +1331,95 @@ button:disabled { box-shadow: none; }
   }
 }
 
+/* Crop Monitoring panel improvements */
+.monitoring-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #dce6dc;
+}
+
+.monitoring-panel-header h4 {
+  margin: 0;
+  color: #205c36;
+  font-size: 18px;
+}
+
+.monitoring-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.monitoring-panel-actions .refresh-button {
+  width: auto;
+  margin: 0;
+}
+
+.crop-monitoring-panel .action-info {
+  margin-top: 14px;
+  padding: 14px;
+  background: #ffffff;
+  border: 1px solid #e1e9e1;
+  border-radius: 10px;
+}
+
+.crop-monitoring-panel .action-info strong {
+  color: #205c36;
+}
+
+.crop-monitoring-panel .action-info p {
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+.crop-monitoring-panel > p {
+  line-height: 1.6;
+}
+
+@media (max-width: 600px) {
+  .monitoring-panel-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .monitoring-panel-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .monitoring-panel-actions .refresh-button {
+    width: 100%;
+  }
+}
+
+
+/* Individual monitoring recommendations */
+.crop-monitoring-panel .action-info > div {
+  padding: 12px 0;
+  border-bottom: 1px solid #e6ece6;
+}
+
+.crop-monitoring-panel .action-info > div:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.crop-monitoring-panel .action-info > div p {
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+.crop-monitoring-panel .action-info > div p:first-child {
+  color: #263b2d;
+}
+
+.crop-monitoring-panel .action-info > div p:last-child {
+  color: #647267;
+}
+
 
