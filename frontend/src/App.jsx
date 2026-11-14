@@ -17,67 +17,96 @@ import {
 } from "./api";
 import "./App.css";
 
+function parseLocalDate(dateValue) {
+  if (!dateValue) return null;
+
+  const dateText = String(dateValue).slice(0, 10);
+  const parts = dateText.split("-").map(Number);
+
+  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) {
+    return null;
+  }
+
+  const [year, month, day] = parts;
+  const date = new Date(year, month - 1, day);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
 function getDashboardCropStatus(crop) {
-  const status = (crop.status || "planned").toLowerCase();
+  const status = String(crop?.status || "planned").trim().toLowerCase();
+  const plantingDate = parseLocalDate(crop?.plantingDate);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  today.setHours(0, 0, 0, 0);
 
-  if (crop.plantingDate) {
-    const plantingDate = new Date(crop.plantingDate);
-    const today = new Date();
-
-    plantingDate.setHours(0, 0, 0, 0);
-    today.setHours(0, 0, 0, 0);
-
-    if (
-      plantingDate > today &&
-      ["growing", "ready", "harvested"].includes(status)
-    ) {
-      return "planned";
-    }
+  if (
+    plantingDate && today &&
+    plantingDate > today &&
+    ["growing", "ready", "harvested"].includes(status)
+  ) {
+    return "planned";
   }
 
   return status;
 }
 
 function getDaysUntilHarvest(harvestDate) {
-  if (!harvestDate) return null;
-
+  const harvest = parseLocalDate(harvestDate);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const harvest = new Date(`${String(harvestDate).slice(0, 10)}T00:00:00`);
+  if (!harvest) return null;
 
-  return Math.ceil(
-    (harvest.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-  );
+  return Math.round((harvest.getTime() - today.getTime()) / 86400000);
 }
 
-function calculateFarmHealth(crops) {
-  if (!crops || crops.length === 0) {
-    return null;
+function getActionKey(action) {
+  return [
+    action?.observationId || "",
+    action?.weatherEventId || "",
+    action?.cropId || "",
+    action?.type || "",
+    action?.action || "",
+  ].join("-");
+}
+
+  function calculateFarmHealth(crops) {
+    if (!crops || crops.length === 0) {
+      return null;
+    }
+
+    let score = 100;
+
+    const activeCrops = crops.filter(
+      (crop) => getDashboardCropStatus(crop) !== "harvested"
+    );
+
+    const cropsWithIssues = activeCrops.filter(
+      (crop) =>
+        (crop.pests?.length || 0) > 0 ||
+        (crop.diseases?.length || 0) > 0
+    );
+
+    const overdueCrops = activeCrops.filter((crop) => {
+      const daysLeft = getDaysUntilHarvest(crop.expectedHarvestDate);
+      return daysLeft !== null && daysLeft < 0;
+    });
+
+    score -= cropsWithIssues.length * 15;
+    score -= overdueCrops.length * 10;
+
+    return Math.max(0, Math.min(100, score));
   }
-
-  let score = 100;
-
-  const activeCrops = crops.filter(
-    (crop) => getDashboardCropStatus(crop) !== "harvested"
-  );
-
-  const cropsWithIssues = activeCrops.filter(
-    (crop) =>
-      (crop.pests?.length || 0) > 0 ||
-      (crop.diseases?.length || 0) > 0
-  );
-
-  const overdueCrops = activeCrops.filter((crop) => {
-    const daysLeft = getDaysUntilHarvest(crop.expectedHarvestDate);
-    return daysLeft !== null && daysLeft < 0;
-  });
-
-  score -= cropsWithIssues.length * 15;
-  score -= overdueCrops.length * 10;
-
-  return Math.max(0, Math.min(100, score));
-}
 
 // Convert comma-separated text into a clean array.
 function convertToArray(value) {
@@ -132,7 +161,7 @@ function App() {
 
 // Generate crop health alerts for the dashboard
   const cropHealthAlerts = crops
-    .filter((crop) => crop.status !== "harvested")
+    .filter((crop) => getDashboardCropStatus(crop) !== "harvested")
     .flatMap((crop) => {
       const alerts = [];
 
@@ -173,14 +202,8 @@ function App() {
 
       // Harvest warning: expected within 14 days
       if (crop.expectedHarvestDate) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const harvestDate = new Date(crop.expectedHarvestDate);
-        harvestDate.setHours(0, 0, 0, 0);
-
-        const daysUntilHarvest = Math.ceil(
-          (harvestDate - today) / (1000 * 60 * 60 * 24)
+        const daysUntilHarvest = getDaysUntilHarvest(
+          crop.expectedHarvestDate
         );
 
         if (daysUntilHarvest >= 0 && daysUntilHarvest <= 14) {
@@ -326,7 +349,11 @@ function App() {
 
       const cropRecords = Array.isArray(data)
         ? data
-        : data.crops || data.data || [];
+        : Array.isArray(data?.crops)
+          ? data.crops
+          : Array.isArray(data?.data)
+            ? data.data
+            : [];
 
       setCrops(cropRecords);
       return cropRecords;
@@ -375,12 +402,13 @@ function App() {
 
         if (!active) return;
 
-        const farms = farmData.farms || [];
+        const farms = Array.isArray(farmData?.farms) ? farmData.farms : [];
 
         if (farms.length === 0) {
           setFarmId("");
           setActionPlan(null);
-          setError("No farm found. Please add a farm first.");
+          setShowFarmSetup(true);
+          setError("");
           return;
         }
 
@@ -521,7 +549,7 @@ function App() {
       sessionStorage.setItem("agripilotToken", token);
 
      const farmData = await getMyFarms(token);
-    const farms = farmData.farms || [];
+    const farms = Array.isArray(farmData?.farms) ? farmData.farms : [];
 
     if (farms.length === 0) {
       setFarmId("");
@@ -556,10 +584,22 @@ function App() {
     event.preventDefault();
     setError("");
 
-    if (!farmName.trim() || !farmCity.trim() || !farmCountry.trim() || !farmSize) {
-  setError("Please complete all required farm details.");
-  return;
-}
+    const parsedFarmSize = Number(farmSize);
+
+    if (
+      !farmName.trim() ||
+      !farmCity.trim() ||
+      !farmCountry.trim() ||
+      farmSize.trim() === ""
+    ) {
+      setError("Please complete all required farm details.");
+      return;
+    }
+
+    if (!Number.isFinite(parsedFarmSize) || parsedFarmSize <= 0) {
+      setError("Farm size must be a number greater than zero.");
+      return;
+    }
 
     const latitude = Number(farmLatitude);
     const longitude = Number(farmLongitude);
@@ -591,7 +631,7 @@ function App() {
         },
         latitude,
         longitude,
-        size: Number(farmSize),
+        size: parsedFarmSize,
         crops: farmCrops
           .split(",")
           .map((crop) => crop.trim())
@@ -897,8 +937,7 @@ function App() {
       completionData.weatherEventId = action.weatherEventId;
     }
 
-    const actionKey =
-      action.observationId || action.weatherEventId || action.type;
+    const actionKey = getActionKey(action);
 
     try {
       setCompletingAction(actionKey);
@@ -951,6 +990,8 @@ function App() {
     setEditCropError("");
     setEditCropSuccess("");
     setActiveSection("overview");
+    setShowFarmSetup(false);
+    setFarmId("");
   }
 
   // Loading screen
@@ -1280,7 +1321,7 @@ function App() {
 
                 <article className="stat-card">
                   <span>Pending actions</span>
-                  <strong>{actionPlan.pendingActions ?? 0}</strong>
+                  <strong>{pendingActions.length}</strong>
                 </article>
               </section>
 
@@ -1466,8 +1507,8 @@ function App() {
                       )
                       .sort(
                         (a, b) =>
-                          new Date(a.expectedHarvestDate) -
-                          new Date(b.expectedHarvestDate)
+                          (parseLocalDate(a.expectedHarvestDate)?.getTime() ?? Infinity) -
+                          (parseLocalDate(b.expectedHarvestDate)?.getTime() ?? Infinity)
                       )
                       .slice(0, 5)
                       .map((crop) => {
@@ -1658,6 +1699,14 @@ function App() {
                   <div className="crop-grid">
                     {crops.map((crop, index) => {
                       const monitoring = cropMonitoring[crop._id];
+                      const rawProgress = Number(monitoring?.progressPercentage);
+                      const hasValidProgress =
+                        monitoring?.progressPercentage !== null &&
+                        monitoring?.progressPercentage !== undefined &&
+                        Number.isFinite(rawProgress);
+                      const safeProgress = hasValidProgress
+                        ? Math.max(0, Math.min(100, rawProgress))
+                        : null;
 
                       return (
                         <article
@@ -1771,12 +1820,12 @@ function App() {
 
                               <p>
                                 <strong>Estimated progress:</strong>{" "}
-                                {monitoring.progressPercentage == null
+                                {safeProgress === null
                                   ? "Unavailable"
-                                  : `${monitoring.progressPercentage}%`}
+                                  : `${safeProgress}%`}
                               </p>
 
-                              {monitoring.progressPercentage != null && (
+                              {safeProgress !== null && (
                                 <div
                                   className="monitoring-progress-track"
                                   role="progressbar"
@@ -1784,13 +1833,13 @@ function App() {
                                   aria-valuemin={0}
                                   aria-valuemax={100}
                                   aria-valuenow={
-                                    monitoring.progressPercentage
+                                    safeProgress
                                   }
                                 >
                                   <div
                                     className="monitoring-progress-fill"
                                     style={{
-                                      width: `${monitoring.progressPercentage}%`,
+                                      width: `${safeProgress}%`,
                                     }}
                                   />
                                 </div>
@@ -2217,19 +2266,13 @@ function App() {
                   </p>
                 ) : (
                   filteredActions.map((action, index) => {
-                    const actionKey =
-                      action.observationId ||
-                      action.weatherEventId ||
-                      action.type;
+                    const actionKey = getActionKey(action);
 
                     return (
                       <article
                         className="action-card"
                         key={
-                          action.completionId ||
-                          action.weatherEventId ||
-                          action.observationId ||
-                          index
+                          action.completionId || getActionKey(action) || index
                         }
                       >
                         <div className="action-card-header">

@@ -95,8 +95,10 @@ const getMyCrops = async (req, res) => {
     const farmIds = farms.map((farm) => farm._id);
 
     const crops = await Crop.find({
-      farm: { $in: farmIds }
-    }).populate("farm", "name location");
+  farm: { $in: farmIds }
+    })
+  .sort({ createdAt: -1 })
+  .populate("farm", "name location");
 
     return res.status(200).json({
       message: "Crops retrieved successfully",
