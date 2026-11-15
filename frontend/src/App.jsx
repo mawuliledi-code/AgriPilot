@@ -1087,6 +1087,19 @@ function App() {
             >
               <span>✓</span> Recommended Actions
             </a>
+            <a
+              href="#action-planner"
+              className={`nav-link ${
+                activeSection === "planner" ? "active" : ""
+              }`}
+              onClick={(event) => {
+                event.preventDefault();
+                setActiveSection("planner");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            >
+              <span>📋</span> Action Planner
+            </a>
 
             <a
               href="#action-history"
@@ -1260,6 +1273,133 @@ function App() {
                 disabled={weatherLoading}
               >
                 {weatherLoading ? "Refreshing weather..." : "Refresh weather"}
+              </button>
+            </section>
+                    ) : activeSection === "planner" ? (
+            /* Separate Action Planner page */
+            <section
+              className="actions-section"
+              id="action-planner"
+            >
+              <h2>Action Planner</h2>
+
+              <p className="history-subtitle">
+                View your farm tasks, follow crop guidance, and track completed actions.
+              </p>
+
+              <div className="action-filters">
+                <button
+                  type="button"
+                  className={actionFilter === "all" ? "filter-button active" : "filter-button"}
+                  onClick={() => setActionFilter("all")}
+                >
+                  All ({actions.length})
+                </button>
+
+                <button
+                  type="button"
+                  className={actionFilter === "pending" ? "filter-button active" : "filter-button"}
+                  onClick={() => setActionFilter("pending")}
+                >
+                  Pending ({pendingActions.length})
+                </button>
+
+                <button
+                  type="button"
+                  className={actionFilter === "completed" ? "filter-button active" : "filter-button"}
+                  onClick={() => setActionFilter("completed")}
+                >
+                  Completed ({actions.length - pendingActions.length})
+                </button>
+              </div>
+
+              {filteredActions.length === 0 ? (
+                <p>No actions found for this filter.</p>
+              ) : (
+                filteredActions.map((action, index) => {
+                  const actionKey = getActionKey(action);
+
+                  return (
+                    <article
+                      className="action-card"
+                      key={action.completionId || actionKey || index}
+                    >
+                      <div className="action-card-header">
+                        <div>
+                          <span className="action-category">
+                            {action.source === "crop_guidance"
+                              ? "Crop Guidance"
+                              : action.source === "crop_health"
+                                ? "Crop Health"
+                                : action.source === "weather"
+                                  ? "Weather"
+                                  : "Farm Recommendation"}
+                          </span>
+                          <h3>{action.action || "Farm action"}</h3>
+                        </div>
+
+                        <span className={`action-status ${action.status || "unknown"}`}>
+                          {action.status || "Unknown"}
+                        </span>
+                      </div>
+
+                      {action.crop && (
+                        <p className="action-detail">
+                          <strong>Crop:</strong> {action.crop}
+                        </p>
+                      )}
+
+                      {action.message && (
+                        <p className="action-message">{action.message}</p>
+                      )}
+
+                      {action.whyThisMatters && (
+                        <div className="action-info">
+                          <strong>Why this matters</strong>
+                          <p>{action.whyThisMatters}</p>
+                        </div>
+                      )}
+
+                      {action.completionCheck && (
+                        <div className="action-info">
+                          <strong>What to check</strong>
+                          <p>{action.completionCheck}</p>
+                        </div>
+                      )}
+
+                      {action.status === "pending" && (
+                        <button
+                          type="button"
+                          className="complete-action-button"
+                          onClick={() => handleCompleteAction(action)}
+                          disabled={completingAction === actionKey}
+                        >
+                          {completingAction === actionKey
+                            ? "Saving..."
+                            : "Mark as Completed"}
+                        </button>
+                      )}
+                    </article>
+                  );
+                })
+              )}
+
+              {actionPlan.disclaimer && (
+                <p className="dashboard-disclaimer">
+                  {actionPlan.disclaimer}
+                </p>
+              )}
+
+              <button
+                type="button"
+                className="refresh-button"
+                onClick={() => {
+                  const token = sessionStorage.getItem("agripilotToken");
+                  if (token) loadActionPlan(token);
+                }}
+                disabled={planLoading}
+              >
+                {planLoading ? "Refreshing..." : "Refresh action plan"}
               </button>
             </section>
           ) : (
@@ -2290,7 +2430,9 @@ function App() {
                                 ? "Weather"
                                 : action.source === "crop_health"
                                   ? "Crop Health"
-                                  : "Farm Recommendation"}
+                                  : action.source === "crop_guidance"
+                                    ? "Crop Guidance"
+                                    : "Farm Recommendation"}
                             </span>
 
                             <h3>{action.action || "Farm action"}</h3>

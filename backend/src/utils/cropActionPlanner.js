@@ -1,5 +1,6 @@
 
 const getCropGrowthStage = require("./cropGrowthStage");
+const getCropStageGuidance = require("./cropStageGuidance");
 
 const severityPriority = {
   high: 1,
@@ -66,9 +67,11 @@ const createCropActionPlan = (
 ) => {
   const actions = [];
 
+
   // 1. Index existing completion records.
   const completedByObservation = new Map();
   const completedByWeatherEvent = new Map();
+  const completedByCropGuidance = new Map();
 
   for (const record of completedRecords) {
     if (
@@ -97,7 +100,30 @@ const createCropActionPlan = (
         completedByWeatherEvent.set(key, record);
       }
     }
+
+    // Match completed crop-stage guidance.
+    if (
+      record.crop &&
+      typeof record.actionType === "string" &&
+      record.actionType.startsWith("crop_guidance_")
+    ) {
+      const key = [
+        record.crop.toString(),
+        record.actionType,
+      ].join(":");
+
+      const previous = completedByCropGuidance.get(key);
+
+      if (
+        !previous ||
+        new Date(record.completedAt || 0) >
+          new Date(previous.completedAt || 0)
+      ) {
+        completedByCropGuidance.set(key, record);
+      }
+    }
   }
+
 
   // Helper: apply completion details without changing stored records.
   const applyCompletionStatus = (action, completion) => {
@@ -157,24 +183,37 @@ const createCropActionPlan = (
     );
   }
 
-  // 3. Check crop maturity.
+ 
+  // 3. Generate crop-stage guidance for every crop.
   for (const crop of crops) {
     const growth = getCropGrowthStage(crop);
+    const guidance = getCropStageGuidance(crop, growth);
 
-    if (growth.stage === "potentially_ready") {
-      actions.push({
-        source: "crop_growth",
-        type: "harvest_check",
-        priority: 2,
-        severity: "medium",
-        crop: crop.name,
-        cropId: crop._id,
-        status: "pending",
-        action: "Inspect the crop and confirm maturity before harvesting.",
-        daysSincePlanting: growth.daysSincePlanting,
-      });
+    if (!guidance) {
+      continue;
     }
+
+    const actionType = `crop_guidance_${growth.stage}`;
+
+    const completionKey = [
+      crop._id.toString(),
+      actionType,
+    ].join(":");
+
+    const completion =
+      completedByCropGuidance.get(completionKey) || null;
+
+    actions.push(
+      applyCompletionStatus(
+        {
+          ...guidance,
+          type: actionType,
+        },
+        completion
+      )
+    );
   }
+
 
   // 4. Build weather actions and merge duplicate heat rules.
   // Heat recommendations in the same response describe the same
@@ -339,10 +378,18 @@ const createCropActionPlan = (
         "Confirming maturity helps avoid harvesting too early.";
       action.completionCheck =
         "Inspect the crop and record whether it is mature enough to harvest.";
+        } else if (action.source === "crop_guidance") {
+      action.whyThisMatters =
+        action.whyThisMatters ||
+        "Following the crop-stage guidance helps support healthy crop development.";
+
+      action.completionCheck =
+        action.completionCheck ||
+        "Complete the recommended inspection and record the result.";
     } else {
       action.whyThisMatters =
         "Following up helps the farmer detect changing conditions and decide whether further action is needed.";
-      action.completionCheck =
+            action.completionCheck =
         "Inspect the relevant crop or condition and record the result.";
     }
   }
