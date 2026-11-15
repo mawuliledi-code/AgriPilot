@@ -141,6 +141,7 @@ function App() {
   // Dashboard page navigation
   const [activeSection, setActiveSection] = useState("overview");
   const [actionFilter, setActionFilter] = useState("all");
+  const [cropToNavigate, setCropToNavigate] = useState(null);
 
   // Action history
   const [actionHistory, setActionHistory] = useState([]);
@@ -448,6 +449,13 @@ function App() {
     }
   }, [checkingSession]);
 
+ // Navigate to the selected crop after the Overview section renders
+  useEffect(() => {
+    if (!cropToNavigate?.cropId || activeSection !== "overview") return;
+
+    window.location.hash = `crop-${cropToNavigate.cropId}`;
+  }, [cropToNavigate, activeSection]);
+
   // Fetch fresh monitoring data every time the user clicks the button
   async function handleViewMonitoring(crop) {
     const token = sessionStorage.getItem("agripilotToken");
@@ -510,8 +518,8 @@ function App() {
 
     setActiveSection("overview");
 
-    // Scroll to the selected crop immediately
-    window.location.hash = `crop-${selectedCrop._id}`;
+    // Schedule navigation to the selected crop
+    setCropToNavigate({ cropId: selectedCrop._id });
 
     // Load monitoring data without delaying navigation
     handleViewMonitoring(selectedCrop);

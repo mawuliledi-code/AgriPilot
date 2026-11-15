@@ -12,6 +12,7 @@ const cropHealthRoutes = require("./routes/cropHealthRoutes");
 const weatherRoutes = require("./routes/weatherRoutes");
 const cropActionPlannerRoutes = require("./routes/cropActionPlannerRoutes");
 const actionCompletionRoutes = require("./routes/actionCompletionRoutes");
+const fertilizerTransactionRoutes = require("./routes/fertilizerTransactionRoutes");
 
 
 const app = express();
@@ -29,8 +30,7 @@ app.use("/api/crop-health", cropHealthRoutes);
 app.use("/api/weather", weatherRoutes);
 app.use("/api/action-planner", cropActionPlannerRoutes);
 app.use("/api/action-completions", actionCompletionRoutes);
-
-
+app.use("/api/transactions", fertilizerTransactionRoutes);
 
 app.get("/", (req, res) => {
     res.json({
