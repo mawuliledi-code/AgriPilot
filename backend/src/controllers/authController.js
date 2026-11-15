@@ -66,6 +66,7 @@ const loginUser = async (req, res) => {
     // Find user
     const normalizedEmail = String(email).trim().toLowerCase();
     const user = await User.findOne({ email: normalizedEmail });
+    console.log("LOGIN DEBUG - User found:", !!user);
 
     if (!user) {
       return res.status(401).json({
@@ -75,6 +76,7 @@ const loginUser = async (req, res) => {
 
    // Check password
     const passwordIsCorrect = await bcrypt.compare(password, user.password);
+    console.log("LOGIN DEBUG - Password correct:", passwordIsCorrect);
 
     if (!passwordIsCorrect) {
       return res.status(401).json({
