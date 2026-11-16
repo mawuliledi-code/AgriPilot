@@ -14,6 +14,10 @@ import {
   deleteCrop,
   updateCrop,
   getCropMonitoring,
+  getCropHealthDashboard,
+  createHealthObservation,
+  updateHealthObservation,
+  getHealthRecommendations,
 } from "./api";
 import "./App.css";
 
@@ -158,6 +162,26 @@ function App() {
   const [cropLoading, setCropLoading] = useState(false);
   const [cropError, setCropError] = useState("");
   const [alertFilter, setAlertFilter] = useState("all");
+
+  // Crop health observations
+  const [healthObservations, setHealthObservations] = useState([]);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthError, setHealthError] = useState("");
+  const [healthSaving, setHealthSaving] = useState(false);
+
+  // Add and edit crop health observations
+  const [healthFormCropId, setHealthFormCropId] = useState(null);
+  const [editingHealthObservationId, setEditingHealthObservationId] = useState(null);
+  const [healthObservationType, setHealthObservationType] = useState("pest");
+  const [healthObservationName, setHealthObservationName] = useState("");
+  const [healthObservationDate, setHealthObservationDate] = useState("");
+  const [healthSeverity, setHealthSeverity] = useState("medium");
+  const [healthSymptoms, setHealthSymptoms] = useState("");
+  const [healthNotes, setHealthNotes] = useState("");
+  const [healthTreatment, setHealthTreatment] = useState("");
+  const [healthStatus, setHealthStatus] = useState("observed");
+
+  // Add and edit crop health observations
 
 
 // Generate crop health alerts for the dashboard
@@ -340,6 +364,30 @@ function App() {
     }
   }
 
+  // Load health observations for the dashboard
+  async function loadHealthObservations(token) {
+    if (!token) return;
+
+    setHealthLoading(true);
+    setHealthError("");
+
+    try {
+      const data = await getCropHealthDashboard(token);
+      const records = Array.isArray(data?.observations)
+        ? data.observations
+        : [];
+
+      setHealthObservations(records);
+      return records;
+    } catch (err) {
+      setHealthError(err.message || "Could not load health observations.");
+      console.error("Error loading health observations:", err);
+      return [];
+    } finally {
+      setHealthLoading(false);
+    }
+  }
+
   // Load crops from the backend
   async function loadCrops(token) {
     setCropLoading(true);
@@ -425,6 +473,7 @@ function App() {
         await Promise.all([
           loadActionHistory(token, selectedFarmId),
           loadCrops(token),
+          loadHealthObservations(token),
           loadFarmWeather(token, selectedFarmId),
         ]);
       } catch (err) {
@@ -577,6 +626,7 @@ function App() {
       await Promise.all([
         loadActionHistory(token, selectedFarmId),
         loadCrops(token),
+        loadHealthObservations(token),
         loadFarmWeather(token, selectedFarmId),
       ]);
     } catch (err) {
@@ -745,6 +795,7 @@ function App() {
 
       await createCrop(token, cropData);
       await loadCrops(token);
+      await loadHealthObservations(token);
 
       setCropFormSuccess(`${cropName} was added successfully.`);
       setShowCropForm(false);
@@ -759,6 +810,222 @@ function App() {
     } finally {
       setSavingCrop(false);
     }
+  }
+
+  // Open a blank form to add a health observation
+  function handleAddHealthObservation(cropId) {
+    setHealthFormCropId(cropId);
+    setEditingHealthObservationId(null);
+    setHealthObservationType("pest");
+    setHealthObservationName("");
+    setHealthObservationDate(new Date().toISOString().slice(0, 10));
+    setHealthSeverity("medium");
+    setHealthSymptoms("");
+    setHealthNotes("");
+    setHealthTreatment("");
+    setHealthStatus("observed");
+    setHealthError("");
+  }
+
+  // Load an existing observation into the edit form
+  function handleEditHealthObservation(observation) {
+    setHealthFormCropId(observation.crop?._id || observation.crop);
+    setEditingHealthObservationId(observation._id);
+    setHealthObservationType(observation.observationType || "other");
+    setHealthObservationName(observation.name || "");
+    setHealthObservationDate(
+      observation.observationDate
+        ? new Date(observation.observationDate).toISOString().slice(0, 10)
+        : ""
+    );
+    setHealthSeverity(observation.severity || "medium");
+    setHealthSymptoms(observation.symptoms || "");
+    setHealthNotes(observation.notes || "");
+    setHealthTreatment(observation.treatmentApplied || "");
+    setHealthStatus(observation.status || "observed");
+    setHealthError("");
+  }
+
+  // Save a new observation or update an existing one
+  async function handleSaveHealthObservation(event) {
+    event.preventDefault();
+
+    const token = sessionStorage.getItem("agripilotToken");
+
+    if (!token) {
+      setHealthError("Your session has expired. Please log in again.");
+      return;
+    }
+
+    if (!healthFormCropId) {
+      setHealthError("Please select a crop.");
+      return;
+    }
+
+    if (!editingHealthObservationId &&
+        (!healthObservationName.trim() || !healthObservationDate)) {
+      setHealthError("Please enter the issue name and observation date.");
+      return;
+    }
+
+    const observationData = {
+      observationType: healthObservationType,
+      name: healthObservationName.trim(),
+      observationDate: healthObservationDate,
+      severity: healthSeverity,
+      symptoms: healthSymptoms.trim(),
+      notes: healthNotes.trim(),
+      treatmentApplied: healthTreatment.trim(),
+      status: healthStatus,
+    };
+
+    try {
+      setHealthSaving(true);
+      setHealthError("");
+
+      if (editingHealthObservationId) {
+        await updateHealthObservation(
+          token,
+          editingHealthObservationId,
+          {
+            severity: healthSeverity,
+            symptoms: healthSymptoms.trim(),
+            notes: healthNotes.trim(),
+            treatmentApplied: healthTreatment.trim(),
+            status: healthStatus,
+          }
+        );
+      } else {
+        await createHealthObservation(
+          token,
+          healthFormCropId,
+          observationData
+        );
+      }
+
+      await loadHealthObservations(token);
+      setHealthFormCropId(null);
+      setEditingHealthObservationId(null);
+    } catch (err) {
+      setHealthError(err.message || "Could not save the health observation.");
+    } finally {
+      setHealthSaving(false);
+    }
+  }
+
+  // Close the health observation form
+  function handleCancelHealthObservation() {
+    setHealthFormCropId(null);
+    setEditingHealthObservationId(null);
+    setHealthError("");
+  }
+
+  // Open a blank form to add a health observation
+  function handleAddHealthObservation(cropId) {
+    setHealthFormCropId(cropId);
+    setEditingHealthObservationId(null);
+    setHealthObservationType("pest");
+    setHealthObservationName("");
+    setHealthObservationDate(new Date().toISOString().slice(0, 10));
+    setHealthSeverity("medium");
+    setHealthSymptoms("");
+    setHealthNotes("");
+    setHealthTreatment("");
+    setHealthStatus("observed");
+    setHealthError("");
+  }
+
+  // Load an existing observation into the edit form
+  function handleEditHealthObservation(observation) {
+    setHealthFormCropId(observation.crop?._id || observation.crop);
+    setEditingHealthObservationId(observation._id);
+    setHealthObservationType(observation.observationType || "other");
+    setHealthObservationName(observation.name || "");
+    setHealthObservationDate(
+      observation.observationDate
+        ? new Date(observation.observationDate).toISOString().slice(0, 10)
+        : ""
+    );
+    setHealthSeverity(observation.severity || "medium");
+    setHealthSymptoms(observation.symptoms || "");
+    setHealthNotes(observation.notes || "");
+    setHealthTreatment(observation.treatmentApplied || "");
+    setHealthStatus(observation.status || "observed");
+    setHealthError("");
+  }
+
+  // Save a new observation or update an existing one
+  async function handleSaveHealthObservation(event) {
+    event.preventDefault();
+
+    const token = sessionStorage.getItem("agripilotToken");
+
+    if (!token) {
+      setHealthError("Your session has expired. Please log in again.");
+      return;
+    }
+
+    if (!healthFormCropId) {
+      setHealthError("Please select a crop.");
+      return;
+    }
+
+    if (!editingHealthObservationId &&
+        (!healthObservationName.trim() || !healthObservationDate)) {
+      setHealthError("Please enter the issue name and observation date.");
+      return;
+    }
+
+    const observationData = {
+      observationType: healthObservationType,
+      name: healthObservationName.trim(),
+      observationDate: healthObservationDate,
+      severity: healthSeverity,
+      symptoms: healthSymptoms.trim(),
+      notes: healthNotes.trim(),
+      treatmentApplied: healthTreatment.trim(),
+      status: healthStatus,
+    };
+
+    try {
+      setHealthSaving(true);
+      setHealthError("");
+
+      if (editingHealthObservationId) {
+        await updateHealthObservation(
+          token,
+          editingHealthObservationId,
+          {
+            severity: healthSeverity,
+            symptoms: healthSymptoms.trim(),
+            notes: healthNotes.trim(),
+            treatmentApplied: healthTreatment.trim(),
+            status: healthStatus,
+          }
+        );
+      } else {
+        await createHealthObservation(
+          token,
+          healthFormCropId,
+          observationData
+        );
+      }
+
+      await loadHealthObservations(token);
+      setHealthFormCropId(null);
+      setEditingHealthObservationId(null);
+    } catch (err) {
+      setHealthError(err.message || "Could not save the health observation.");
+    } finally {
+      setHealthSaving(false);
+    }
+  }
+
+  // Close the health observation form
+  function handleCancelHealthObservation() {
+    setHealthFormCropId(null);
+    setEditingHealthObservationId(null);
+    setHealthError("");
   }
 
   // Open the edit form with the crop's current details
@@ -845,6 +1112,7 @@ function App() {
       });
 
       await loadCrops(token);
+      await loadHealthObservations(token);
 
       setCropMonitoring((previous) => {
         const updated = { ...previous };
@@ -2320,6 +2588,169 @@ function App() {
                             <p>{alert.recommendedAction}</p>
                           </div>
                         )}
+
+                        {/* Recorded health observations for this crop */}
+                        <div className="health-observations">
+                          <h4>Health Observations</h4>
+
+                          {healthObservations
+                            .filter((observation) => {
+                              const observationCropId =
+                                observation.crop?._id ??
+                                observation.crop?.id ??
+                                observation.crop ??
+                                observation.cropId;
+
+                              return String(observationCropId) === String(alert.cropId);
+                            })
+                            .map((observation) => (
+                              <div className="health-observation-card" key={observation._id}>
+                                <strong>
+                                  {observation.observationType}: {observation.name}
+                                </strong>
+                                <p>
+                                  Severity: {observation.severity || "Not specified"}
+                                  {" · "}
+                                  Status: {(observation.status || "observed").replace("_", " ")}
+                                </p>
+                                {observation.symptoms && <p>Symptoms: {observation.symptoms}</p>}
+                                {observation.treatmentApplied && (
+                                  <p>Treatment: {observation.treatmentApplied}</p>
+                                )}
+                                {observation.notes && <p>Notes: {observation.notes}</p>}
+                                <button
+                                  type="button"
+                                  className="refresh-button"
+                                  onClick={() => handleEditHealthObservation(observation)}
+                                >
+                                  Edit Observation
+                                </button>
+                              </div>
+                            ))}
+
+                          <button
+                            type="button"
+                            className="refresh-button"
+                            onClick={() => handleAddHealthObservation(alert.cropId)}
+                          >
+                            + Add Observation
+                          </button>
+
+                          {healthFormCropId === alert.cropId && (
+                            <form
+                              className="health-observation-form"
+                              onSubmit={handleSaveHealthObservation}
+                            >
+                              <h4>
+                                {editingHealthObservationId
+                                  ? "Edit Health Observation"
+                                  : "Add Health Observation"}
+                              </h4>
+
+                              {!editingHealthObservationId && (
+                                <>
+                                  <label>
+                                    Type
+                                    <select
+                                      value={healthObservationType}
+                                      onChange={(event) => setHealthObservationType(event.target.value)}
+                                    >
+                                      <option value="pest">Pest</option>
+                                      <option value="disease">Disease</option>
+                                      <option value="other">Other</option>
+                                    </select>
+                                  </label>
+
+                                  <label>
+                                    Name
+                                    <input
+                                      value={healthObservationName}
+                                      onChange={(event) => setHealthObservationName(event.target.value)}
+                                      placeholder="e.g. Fall armyworm"
+                                      required
+                                    />
+                                  </label>
+
+                                  <label>
+                                    Observation date
+                                    <input
+                                      type="date"
+                                      value={healthObservationDate}
+                                      onChange={(event) => setHealthObservationDate(event.target.value)}
+                                      required
+                                    />
+                                  </label>
+                                </>
+                              )}
+
+                              <label>
+                                Severity
+                                <select
+                                  value={healthSeverity}
+                                  onChange={(event) => setHealthSeverity(event.target.value)}
+                                >
+                                  <option value="low">Low</option>
+                                  <option value="medium">Medium</option>
+                                  <option value="high">High</option>
+                                </select>
+                              </label>
+
+                              <label>
+                                Symptoms
+                                <textarea
+                                  value={healthSymptoms}
+                                  onChange={(event) => setHealthSymptoms(event.target.value)}
+                                  placeholder="Describe the symptoms"
+                                />
+                              </label>
+
+                              <label>
+                                Notes
+                                <textarea
+                                  value={healthNotes}
+                                  onChange={(event) => setHealthNotes(event.target.value)}
+                                  placeholder="Additional observations"
+                                />
+                              </label>
+
+                              <label>
+                                Treatment applied
+                                <textarea
+                                  value={healthTreatment}
+                                  onChange={(event) => setHealthTreatment(event.target.value)}
+                                  placeholder="Describe any treatment"
+                                />
+                              </label>
+
+                              <label>
+                                Status
+                                <select
+                                  value={healthStatus}
+                                  onChange={(event) => setHealthStatus(event.target.value)}
+                                >
+                                  <option value="observed">Observed</option>
+                                  <option value="treatment_applied">Treatment applied</option>
+                                  <option value="resolved">Resolved</option>
+                                </select>
+                              </label>
+
+                              {healthError && (
+                                <p className="error-message" role="alert">{healthError}</p>
+                              )}
+
+                              <button type="submit" disabled={healthSaving}>
+                                {healthSaving ? "Saving..." : "Save Observation"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleCancelHealthObservation}
+                                disabled={healthSaving}
+                              >
+                                Cancel
+                              </button>
+                            </form>
+                          )}
+                        </div>
 
                         {/* View Crop Details button */}
                         <button

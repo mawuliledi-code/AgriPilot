@@ -1,35 +1,47 @@
-
-const Farm = require("../models/Farm");
-const Crop = require("../models/Crop");
+const pool = require("../config/postgres");
 const calculateFarmHealth = require("../utils/farmHealthCalculator");
 
 const getFarmHealth = async (req, res) => {
   try {
-    // Find all farms belonging to the logged-in farmer
-    const farms = await Farm.find({
-      owner: req.user.userId
-    });
+    // Find all farms belonging to the logged-in farmer.
+    const farmsResult = await pool.query(
+      `SELECT farm_id
+       FROM farms
+       WHERE user_id = $1`,
+      [req.user.userId]
+    );
 
-    // Get the IDs of those farms
-    const farmIds = farms.map((farm) => farm._id);
+    const farmIds = farmsResult.rows.map((farm) => farm.farm_id);
 
-    // Find crops belonging to those farms
-    const crops = await Crop.find({
-      farm: { $in: farmIds }
-    });
+    let crops = [];
 
-    // Calculate the farm health report
+    // Only query crops if the farmer has farms.
+    if (farmIds.length > 0) {
+      const cropsResult = await pool.query(
+        `SELECT
+           crop_name AS name,
+           status,
+           pests,
+           diseases
+         FROM crops
+         WHERE farm_id = ANY($1::integer[])`,
+        [farmIds]
+      );
+
+      crops = cropsResult.rows;
+    }
+
     const healthReport = calculateFarmHealth(crops);
 
     return res.status(200).json({
       message: "Farm health calculated successfully",
-      farmCount: farms.length,
+      farmCount: farmsResult.rows.length,
       cropCount: crops.length,
       ...healthReport
     });
 
   } catch (error) {
-    console.error("Farm health error:", error);
+    console.error("Farm health error:", error.message);
 
     return res.status(500).json({
       message: "Failed to calculate farm health"

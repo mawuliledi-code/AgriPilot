@@ -5,7 +5,8 @@ const protect = require("../middleware/authMiddleware");
 
 const {
   createFarm,
-  getMyFarms
+  getMyFarms,
+  deleteFarm
 } = require("../controllers/farmController");
 
 const {
@@ -23,4 +24,9 @@ router.get("/health", protect, getFarmHealth);
 // Create a new farm
 router.post("/", protect, createFarm);
 
+// Delete a farm belonging to the logged-in farmer
+router.delete("/:id", protect, deleteFarm);
+
 module.exports = router;
+
+

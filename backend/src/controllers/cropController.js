@@ -1,7 +1,52 @@
 
-const Crop = require("../models/Crop");
-const Farm = require("../models/Farm");
+const pool = require("../config/postgres");
 const cropCatalog = require("../data/cropCatalog");
+
+// Convert a PostgreSQL crop row into the existing API response format.
+const formatCrop = (row) => ({
+  _id: row.crop_id,
+  name: row.crop_name,
+  type: row.crop_type,
+  growingPeriod: row.growing_period || {},
+  commonPests: row.common_pests || [],
+  commonDiseases: row.common_diseases || [],
+  plantingDate: row.planting_date,
+  expectedHarvestDate: row.expected_harvest_date,
+  status: row.status,
+  farm: row.farm_name
+    ? {
+        _id: row.farm_id,
+        name: row.farm_name,
+        location: {
+          city: row.city,
+          country: row.country
+        }
+      }
+    : row.farm_id,
+  irrigation: row.irrigation || {},
+  fertilizer: row.fertilizer || {},
+  pesticide: row.pesticide || {},
+  pests: row.pests || [],
+  diseases: row.diseases || [],
+  notes: row.notes,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at
+});
+
+const getOwnedCrop = async (cropId, userId) => {
+  const result = await pool.query(
+    `SELECT c.*, f.farm_name AS farm_name,
+            f.city, f.country
+     FROM crops c
+     JOIN farms f ON f.farm_id = c.farm_id
+     WHERE c.crop_id = $1 AND f.user_id = $2`,
+    [cropId, userId]
+  );
+
+  return result.rows[0] || null;
+};
+
+const validId = (id) => /^\d+$/.test(String(id));
 
 // Create a new crop
 const createCrop = async (req, res) => {
@@ -35,51 +80,82 @@ const createCrop = async (req, res) => {
       });
     }
 
-    const existingFarm = await Farm.findById(farm);
-
-    if (!existingFarm) {
-      return res.status(404).json({
-        message: "Farm not found"
+    if (!farm || !validId(farm)) {
+      return res.status(400).json({
+        message: "A valid farm ID is required"
       });
     }
 
-    const userId = req.user.userId;
-
-    if (!userId) {
-      return res.status(401).json({
-        message: "User ID not found in authentication token"
+    if (!plantingDate || Number.isNaN(new Date(plantingDate).getTime())) {
+      return res.status(400).json({
+        message: "A valid planting date is required"
       });
     }
 
-    if (existingFarm.owner.toString() !== userId.toString()) {
-      return res.status(403).json({
-        message: "You are not authorized to add a crop to this farm"
+    if (status !== undefined &&
+        !["planned", "growing", "ready", "harvested"].includes(status)) {
+      return res.status(400).json({
+        message: "Invalid crop status",
+        allowedStatuses: ["planned", "growing", "ready", "harvested"]
       });
     }
 
-    const newCrop = await Crop.create({
-      name: cropInfo.name,
-      type: cropInfo.type,
-      growingPeriod: cropInfo.growingPeriod,
-      commonPests: cropInfo.commonPests,
-      commonDiseases: cropInfo.commonDiseases,
-      plantingDate,
-      expectedHarvestDate,
-      status,
-      farm,
-      irrigation,
-      fertilizer,
-      pesticide,
-      pests,
-      diseases,
-      notes
-    });
+    const farmResult = await pool.query(
+      `SELECT farm_id FROM farms
+       WHERE farm_id = $1 AND user_id = $2`,
+      [farm, req.user.userId]
+    );
+
+    if (farmResult.rows.length === 0) {
+      const exists = await pool.query(
+        "SELECT farm_id FROM farms WHERE farm_id = $1",
+        [farm]
+      );
+
+      return res.status(exists.rows.length ? 403 : 404).json({
+        message: exists.rows.length
+          ? "You are not authorized to add a crop to this farm"
+          : "Farm not found"
+      });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO crops (
+        farm_id, crop_name, crop_type, growing_period,
+        common_pests, common_diseases, planting_date,
+        expected_harvest_date, status, irrigation,
+        fertilizer, pesticide, pests, diseases, notes
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8,
+        $9, $10, $11, $12, $13, $14, $15
+      )
+      RETURNING *`,
+      [
+        farm,
+        cropInfo.name,
+        cropInfo.type,
+        JSON.stringify(cropInfo.growingPeriod),
+        JSON.stringify(cropInfo.commonPests || []),
+        JSON.stringify(cropInfo.commonDiseases || []),
+        plantingDate,
+        expectedHarvestDate || null,
+        status || "planned",
+        JSON.stringify(irrigation || {}),
+        JSON.stringify(fertilizer || {}),
+        JSON.stringify(pesticide || {}),
+        JSON.stringify(pests || []),
+        JSON.stringify(diseases || []),
+        notes || null
+      ]
+    );
 
     return res.status(201).json({
       message: "Crop created successfully",
-      crop: newCrop
+      crop: formatCrop(result.rows[0])
     });
   } catch (error) {
+    console.error("Error creating crop:", error.message);
     return res.status(500).json({
       message: "Error creating crop",
       error: error.message
@@ -90,15 +166,16 @@ const createCrop = async (req, res) => {
 // Get all crops belonging to the logged-in farmer
 const getMyCrops = async (req, res) => {
   try {
-    const userId = req.user.userId;
-    const farms = await Farm.find({ owner: userId }).select("_id");
-    const farmIds = farms.map((farm) => farm._id);
+    const result = await pool.query(
+      `SELECT c.*, f.farm_name AS farm_name, f.city, f.country
+       FROM crops c
+       JOIN farms f ON f.farm_id = c.farm_id
+       WHERE f.user_id = $1
+       ORDER BY c.created_at DESC`,
+      [req.user.userId]
+    );
 
-    const crops = await Crop.find({
-  farm: { $in: farmIds }
-    })
-  .sort({ createdAt: -1 })
-  .populate("farm", "name location");
+    const crops = result.rows.map(formatCrop);
 
     return res.status(200).json({
       message: "Crops retrieved successfully",
@@ -106,6 +183,7 @@ const getMyCrops = async (req, res) => {
       crops
     });
   } catch (error) {
+    console.error("Error retrieving crops:", error.message);
     return res.status(500).json({
       message: "Error retrieving crops",
       error: error.message
@@ -113,37 +191,33 @@ const getMyCrops = async (req, res) => {
   }
 };
 
- // update a crop.
+// Update a crop
 const updateCrop = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.userId;
-    const crop = await Crop.findById(id);
+
+    if (!validId(id)) {
+      return res.status(404).json({ message: "Crop not found" });
+    }
+
+    const crop = await getOwnedCrop(id, req.user.userId);
 
     if (!crop) {
-      return res.status(404).json({
-        message: "Crop not found"
+      const exists = await pool.query(
+        "SELECT crop_id FROM crops WHERE crop_id = $1",
+        [id]
+      );
+
+      return res.status(exists.rows.length ? 403 : 404).json({
+        message: exists.rows.length
+          ? "You are not authorized to update this crop"
+          : "Crop not found"
       });
     }
 
-    const farm = await Farm.findOne({
-      _id: crop.farm,
-      owner: userId
-    });
-
-    if (!farm) {
-      return res.status(403).json({
-        message: "You are not authorized to update this crop"
-      });
-    }
-
-    // Validate status changes before saving.
     if (req.body.status !== undefined) {
       const allowedStatuses = [
-        "planned",
-        "growing",
-        "ready",
-        "harvested"
+        "planned", "growing", "ready", "harvested"
       ];
 
       if (!allowedStatuses.includes(req.body.status)) {
@@ -153,18 +227,17 @@ const updateCrop = async (req, res) => {
         });
       }
 
-      // Use the planting date from the request if supplied;
-      // otherwise, use the crop's existing planting date.
       const proposedPlantingDate =
         req.body.plantingDate !== undefined
           ? req.body.plantingDate
-          : crop.plantingDate;
+          : crop.planting_date;
 
       const plantingDate = proposedPlantingDate
         ? new Date(proposedPlantingDate)
         : null;
 
-      if (proposedPlantingDate && Number.isNaN(plantingDate.getTime())) {
+      if (proposedPlantingDate &&
+          Number.isNaN(plantingDate.getTime())) {
         return res.status(400).json({
           message: "Invalid planting date"
         });
@@ -184,31 +257,64 @@ const updateCrop = async (req, res) => {
       }
     }
 
-    const allowedFields = [
-      "plantingDate",
-      "expectedHarvestDate",
-      "status",
-      "irrigation",
-      "fertilizer",
-      "pesticide",
-      "pests",
-      "diseases",
-      "notes"
-    ];
+    const fields = {
+      plantingDate: ["planting_date", false],
+      expectedHarvestDate: ["expected_harvest_date", false],
+      status: ["status", false],
+      irrigation: ["irrigation", true],
+      fertilizer: ["fertilizer", true],
+      pesticide: ["pesticide", true],
+      pests: ["pests", true],
+      diseases: ["diseases", true],
+      notes: ["notes", false]
+    };
 
-    for (const field of allowedFields) {
+    const updates = [];
+    const values = [];
+    let index = 1;
+
+    for (const [field, [column, isJson]] of Object.entries(fields)) {
       if (req.body[field] !== undefined) {
-        crop.set(field, req.body[field]);
+        values.push(
+          isJson ? JSON.stringify(req.body[field]) : req.body[field]
+        );
+        updates.push(
+          `${column} = $${index}${isJson ? "::jsonb" : ""}`
+        );
+        index++;
       }
     }
 
-    await crop.save();
+    if (updates.length === 0) {
+      return res.status(200).json({
+        message: "Crop updated successfully",
+        crop: formatCrop(crop)
+      });
+    }
+
+    values.push(id);
+
+    const result = await pool.query(
+      `UPDATE crops
+       SET ${updates.join(", ")}, updated_at = CURRENT_TIMESTAMP
+       WHERE crop_id = $${index}
+       RETURNING *`,
+      values
+    );
+
+    const updatedCrop = {
+      ...result.rows[0],
+      farm_name: crop.farm_name,
+      city: crop.city,
+      country: crop.country
+    };
 
     return res.status(200).json({
       message: "Crop updated successfully",
-      crop
+      crop: formatCrop(updatedCrop)
     });
   } catch (error) {
+    console.error("Error updating crop:", error.message);
     return res.status(500).json({
       message: "Error updating crop",
       error: error.message
@@ -216,37 +322,40 @@ const updateCrop = async (req, res) => {
   }
 };
 
-
 // Delete a crop
 const deleteCrop = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.userId;
-    const crop = await Crop.findById(id);
+
+    if (!validId(id)) {
+      return res.status(404).json({ message: "Crop not found" });
+    }
+
+    const crop = await getOwnedCrop(id, req.user.userId);
 
     if (!crop) {
-      return res.status(404).json({
-        message: "Crop not found"
+      const exists = await pool.query(
+        "SELECT crop_id FROM crops WHERE crop_id = $1",
+        [id]
+      );
+
+      return res.status(exists.rows.length ? 403 : 404).json({
+        message: exists.rows.length
+          ? "You are not authorized to delete this crop"
+          : "Crop not found"
       });
     }
 
-    const farm = await Farm.findOne({
-      _id: crop.farm,
-      owner: userId
-    });
-
-    if (!farm) {
-      return res.status(403).json({
-        message: "You are not authorized to delete this crop"
-      });
-    }
-
-    await Crop.findByIdAndDelete(id);
+    await pool.query(
+      "DELETE FROM crops WHERE crop_id = $1",
+      [id]
+    );
 
     return res.status(200).json({
       message: "Crop deleted successfully"
     });
   } catch (error) {
+    console.error("Error deleting crop:", error.message);
     return res.status(500).json({
       message: "Error deleting crop",
       error: error.message
@@ -258,31 +367,31 @@ const deleteCrop = async (req, res) => {
 const predictHarvest = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.userId;
-    const crop = await Crop.findById(id);
+
+    if (!validId(id)) {
+      return res.status(404).json({ message: "Crop not found" });
+    }
+
+    const crop = await getOwnedCrop(id, req.user.userId);
 
     if (!crop) {
-      return res.status(404).json({
-        message: "Crop not found"
+      const exists = await pool.query(
+        "SELECT crop_id FROM crops WHERE crop_id = $1",
+        [id]
+      );
+
+      return res.status(exists.rows.length ? 403 : 404).json({
+        message: exists.rows.length
+          ? "You are not authorized to view this crop"
+          : "Crop not found"
       });
     }
 
-    const farm = await Farm.findOne({
-      _id: crop.farm,
-      owner: userId
-    });
-
-    if (!farm) {
-      return res.status(403).json({
-        message: "You are not authorized to view this crop"
-      });
-    }
-
-    const minimumDays = crop.growingPeriod?.minimumDays;
-    const maximumDays = crop.growingPeriod?.maximumDays;
+    const minimumDays = crop.growing_period?.minimumDays;
+    const maximumDays = crop.growing_period?.maximumDays;
 
     if (
-      !crop.plantingDate ||
+      !crop.planting_date ||
       typeof minimumDays !== "number" ||
       typeof maximumDays !== "number"
     ) {
@@ -291,24 +400,21 @@ const predictHarvest = async (req, res) => {
       });
     }
 
-    const earliestHarvest = new Date(crop.plantingDate);
+    const earliestHarvest = new Date(crop.planting_date);
     earliestHarvest.setUTCDate(
       earliestHarvest.getUTCDate() + minimumDays
     );
 
-    const latestHarvest = new Date(crop.plantingDate);
+    const latestHarvest = new Date(crop.planting_date);
     latestHarvest.setUTCDate(
       latestHarvest.getUTCDate() + maximumDays
     );
 
     return res.status(200).json({
       message: "Harvest prediction generated successfully",
-      crop: crop.name,
-      plantingDate: crop.plantingDate,
-      growingPeriod: {
-        minimumDays,
-        maximumDays
-      },
+      crop: crop.crop_name,
+      plantingDate: crop.planting_date,
+      growingPeriod: { minimumDays, maximumDays },
       estimatedHarvestWindow: {
         earliest: earliestHarvest.toISOString().slice(0, 10),
         latest: latestHarvest.toISOString().slice(0, 10)
@@ -316,6 +422,7 @@ const predictHarvest = async (req, res) => {
       note: "This is an estimate. Actual harvest timing depends on crop variety, weather, and growing conditions."
     });
   } catch (error) {
+    console.error("Error predicting harvest:", error.message);
     return res.status(500).json({
       message: "Error predicting harvest",
       error: error.message
@@ -327,32 +434,32 @@ const predictHarvest = async (req, res) => {
 const getWateringReminder = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.userId;
-    const crop = await Crop.findById(id);
+
+    if (!validId(id)) {
+      return res.status(404).json({ message: "Crop not found" });
+    }
+
+    const crop = await getOwnedCrop(id, req.user.userId);
 
     if (!crop) {
-      return res.status(404).json({
-        message: "Crop not found"
+      const exists = await pool.query(
+        "SELECT crop_id FROM crops WHERE crop_id = $1",
+        [id]
+      );
+
+      return res.status(exists.rows.length ? 403 : 404).json({
+        message: exists.rows.length
+          ? "You are not authorized to view this crop"
+          : "Crop not found"
       });
     }
 
-    const farm = await Farm.findOne({
-      _id: crop.farm,
-      owner: userId
-    });
+    const irrigation = crop.irrigation || {};
 
-    if (!farm) {
-      return res.status(403).json({
-        message: "You are not authorized to view this crop"
-      });
-    }
-
-    const irrigation = crop.irrigation;
-
-    if (!irrigation || !irrigation.nextWatering) {
+    if (!irrigation.nextWatering) {
       return res.status(200).json({
         message: "No watering schedule available for this crop",
-        crop: crop.name,
+        crop: crop.crop_name,
         nextWatering: null,
         reminder: "Please add a watering schedule for this crop."
       });
@@ -378,13 +485,14 @@ const getWateringReminder = async (req, res) => {
 
     return res.status(200).json({
       message: "Watering reminder retrieved successfully",
-      crop: crop.name,
+      crop: crop.crop_name,
       wateringFrequency: irrigation.frequency || null,
       lastWatered: irrigation.lastWatered || null,
       nextWatering: irrigation.nextWatering,
       reminder
     });
   } catch (error) {
+    console.error("Error retrieving watering reminder:", error.message);
     return res.status(500).json({
       message: "Error retrieving watering reminder",
       error: error.message
@@ -396,23 +504,23 @@ const getWateringReminder = async (req, res) => {
 const addCareActivity = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.userId;
-    const crop = await Crop.findById(id);
 
-    if (!crop) {
-      return res.status(404).json({
-        message: "Crop not found"
-      });
+    if (!validId(id)) {
+      return res.status(404).json({ message: "Crop not found" });
     }
 
-    const farm = await Farm.findOne({
-      _id: crop.farm,
-      owner: userId
-    });
+    const crop = await getOwnedCrop(id, req.user.userId);
 
-    if (!farm) {
-      return res.status(403).json({
-        message: "You are not authorized to update this crop"
+    if (!crop) {
+      const exists = await pool.query(
+        "SELECT crop_id FROM crops WHERE crop_id = $1",
+        [id]
+      );
+
+      return res.status(exists.rows.length ? 403 : 404).json({
+        message: exists.rows.length
+          ? "You are not authorized to update this crop"
+          : "Crop not found"
       });
     }
 
@@ -425,28 +533,63 @@ const addCareActivity = async (req, res) => {
       notes
     } = req.body;
 
+    const allowedTypes = [
+      "watering", "fertilizing", "pesticide",
+      "inspection", "weeding", "other"
+    ];
+
     if (!activityType || !description) {
       return res.status(400).json({
         message: "Activity type and description are required"
       });
     }
 
-    crop.careHistory.push({
-      activityType,
-      date,
-      description,
-      product,
-      quantity,
-      notes
-    });
+    if (!allowedTypes.includes(activityType)) {
+      return res.status(400).json({
+        message: "Invalid activity type",
+        allowedTypes
+      });
+    }
 
-    await crop.save();
+    const result = await pool.query(
+      `INSERT INTO care_activities (
+        crop_id, activity_type, activity_date,
+        description, product, quantity, notes
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *`,
+      [
+        id,
+        activityType,
+        date || new Date(),
+        description.trim(),
+        product || null,
+        quantity || null,
+        notes || null
+      ]
+    );
+
+    const historyResult = await pool.query(
+      `SELECT * FROM care_activities
+       WHERE crop_id = $1
+       ORDER BY activity_date DESC, activity_id DESC`,
+      [id]
+    );
 
     return res.status(201).json({
       message: "Care activity added successfully",
-      careHistory: crop.careHistory
+      careHistory: historyResult.rows.map((activity) => ({
+        _id: activity.activity_id,
+        activityType: activity.activity_type,
+        date: activity.activity_date,
+        description: activity.description,
+        product: activity.product,
+        quantity: activity.quantity,
+        notes: activity.notes
+      }))
     });
   } catch (error) {
+    console.error("Error adding care activity:", error.message);
     return res.status(500).json({
       message: "Error adding care activity",
       error: error.message
@@ -458,33 +601,51 @@ const addCareActivity = async (req, res) => {
 const getCareHistory = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.userId;
-    const crop = await Crop.findById(id);
+
+    if (!validId(id)) {
+      return res.status(404).json({ message: "Crop not found" });
+    }
+
+    const crop = await getOwnedCrop(id, req.user.userId);
 
     if (!crop) {
-      return res.status(404).json({
-        message: "Crop not found"
+      const exists = await pool.query(
+        "SELECT crop_id FROM crops WHERE crop_id = $1",
+        [id]
+      );
+
+      return res.status(exists.rows.length ? 403 : 404).json({
+        message: exists.rows.length
+          ? "You are not authorized to view this crop"
+          : "Crop not found"
       });
     }
 
-    const farm = await Farm.findOne({
-      _id: crop.farm,
-      owner: userId
-    });
+    const result = await pool.query(
+      `SELECT * FROM care_activities
+       WHERE crop_id = $1
+       ORDER BY activity_date DESC, activity_id DESC`,
+      [id]
+    );
 
-    if (!farm) {
-      return res.status(403).json({
-        message: "You are not authorized to view this crop"
-      });
-    }
+    const careHistory = result.rows.map((activity) => ({
+      _id: activity.activity_id,
+      activityType: activity.activity_type,
+      date: activity.activity_date,
+      description: activity.description,
+      product: activity.product,
+      quantity: activity.quantity,
+      notes: activity.notes
+    }));
 
     return res.status(200).json({
       message: "Care history retrieved successfully",
-      crop: crop.name,
-      count: crop.careHistory.length,
-      careHistory: crop.careHistory
+      crop: crop.crop_name,
+      count: careHistory.length,
+      careHistory
     });
   } catch (error) {
+    console.error("Error retrieving care history:", error.message);
     return res.status(500).json({
       message: "Error retrieving care history",
       error: error.message
@@ -492,65 +653,52 @@ const getCareHistory = async (req, res) => {
   }
 };
 
-
+// Get crop monitoring information
 const getCropMonitoring = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.userId;
 
-    const crop = await Crop.findById(id);
-
-    if (!crop) {
-      return res.status(404).json({
-        message: "Crop not found"
-      });
+    if (!validId(id)) {
+      return res.status(404).json({ message: "Crop not found" });
     }
 
-    // Confirm that the crop belongs to the logged-in farmer.
-    const farm = await Farm.findOne({
-      _id: crop.farm,
-      owner: userId
-    });
+    const crop = await getOwnedCrop(id, req.user.userId);
 
-    if (!farm) {
-      return res.status(403).json({
-        message: "You are not authorized to view this crop"
+    if (!crop) {
+      const exists = await pool.query(
+        "SELECT crop_id FROM crops WHERE crop_id = $1",
+        [id]
+      );
+
+      return res.status(exists.rows.length ? 403 : 404).json({
+        message: exists.rows.length
+          ? "You are not authorized to view this crop"
+          : "Crop not found"
       });
     }
 
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
 
-    const plantingDate = crop.plantingDate
-      ? new Date(crop.plantingDate)
+    const plantingDate = crop.planting_date
+      ? new Date(crop.planting_date)
       : null;
 
-    if (plantingDate) {
-      plantingDate.setUTCHours(0, 0, 0, 0);
-    }
+    if (plantingDate) plantingDate.setUTCHours(0, 0, 0, 0);
 
-    const harvestDate = crop.expectedHarvestDate
-      ? new Date(crop.expectedHarvestDate)
+    const harvestDate = crop.expected_harvest_date
+      ? new Date(crop.expected_harvest_date)
       : null;
 
-    if (harvestDate) {
-      harvestDate.setUTCHours(0, 0, 0, 0);
-    }
+    if (harvestDate) harvestDate.setUTCHours(0, 0, 0, 0);
 
     const totalGrowingDays =
       plantingDate && harvestDate
-        ? Math.round(
-            (harvestDate - plantingDate) / 86400000
-          )
+        ? Math.round((harvestDate - plantingDate) / 86400000)
         : null;
 
     const elapsedDays = plantingDate
-      ? Math.max(
-          0,
-          Math.floor(
-            (today - plantingDate) / 86400000
-          )
-        )
+      ? Math.max(0, Math.floor((today - plantingDate) / 86400000))
       : null;
 
     let progressPercentage = null;
@@ -581,36 +729,34 @@ const getCropMonitoring = async (req, res) => {
     }
 
     const recommendedActions = [];
-
-    const isFuturePlantingDate =
-    plantingDate && plantingDate > today;
+    const isFuturePlantingDate = plantingDate && plantingDate > today;
 
     const monitoringStatus =
-    isFuturePlantingDate &&
-    ["growing", "ready"].includes(crop.status)
-    ? "planned"
-    : crop.status;
+      isFuturePlantingDate &&
+      ["growing", "ready"].includes(crop.status)
+        ? "planned"
+        : crop.status;
 
     if (crop.status === "harvested") {
-  recommendedActions.push({
-    priority: "low",
-    action: "Harvest recorded",
-    reason: "This crop is marked as harvested."
-    });
+      recommendedActions.push({
+        priority: "low",
+        action: "Harvest recorded",
+        reason: "This crop is marked as harvested."
+      });
     } else if (isFuturePlantingDate) {
-    recommendedActions.push({
-    priority: "low",
-    action: "Prepare for planting",
-    reason:
-      "The planting date is in the future. Prepare the field and check planting conditions before planting."
-    });
+      recommendedActions.push({
+        priority: "low",
+        action: "Prepare for planting",
+        reason:
+          "The planting date is in the future. Prepare the field and check planting conditions before planting."
+      });
     } else if (crop.status === "ready") {
-    recommendedActions.push({
-    priority: "high",
-    action: "Check harvest readiness",
-    reason:
-      "This crop is marked ready. Inspect the crop before harvesting."
-    });
+      recommendedActions.push({
+        priority: "high",
+        action: "Check harvest readiness",
+        reason:
+          "This crop is marked ready. Inspect the crop before harvesting."
+      });
     } else if (harvestTiming === "overdue") {
       recommendedActions.push({
         priority: "high",
@@ -648,12 +794,14 @@ const getCropMonitoring = async (req, res) => {
       });
     }
 
-     if (
-        crop.status !== "harvested" &&
-        crop.irrigation?.nextWatering &&
-        (!plantingDate || plantingDate <= today)
+    const irrigation = crop.irrigation || {};
+
+    if (
+      crop.status !== "harvested" &&
+      irrigation.nextWatering &&
+      (!plantingDate || plantingDate <= today)
     ) {
-      const nextWatering = new Date(crop.irrigation.nextWatering);
+      const nextWatering = new Date(irrigation.nextWatering);
       nextWatering.setUTCHours(0, 0, 0, 0);
 
       if (nextWatering < today) {
@@ -685,11 +833,11 @@ const getCropMonitoring = async (req, res) => {
     return res.status(200).json({
       message: "Crop monitoring retrieved successfully",
       monitoring: {
-        cropId: crop._id,
-        cropName: crop.name,
+        cropId: crop.crop_id,
+        cropName: crop.crop_name,
         status: monitoringStatus,
-        plantingDate: crop.plantingDate,
-        expectedHarvestDate: crop.expectedHarvestDate || null,
+        plantingDate: crop.planting_date,
+        expectedHarvestDate: crop.expected_harvest_date || null,
         totalGrowingDays,
         elapsedDays,
         daysUntilHarvest,
@@ -698,15 +846,16 @@ const getCropMonitoring = async (req, res) => {
         pests: crop.pests || [],
         diseases: crop.diseases || [],
         nextWatering:
-        plantingDate && plantingDate > today
-        ? null
-        : crop.irrigation?.nextWatering || null,
+          plantingDate && plantingDate > today
+            ? null
+            : irrigation.nextWatering || null,
         recommendedActions
       },
       note:
         "Progress and harvest timing are calendar-based estimates, not direct measurements of crop maturity."
     });
   } catch (error) {
+    console.error("Error retrieving crop monitoring:", error.message);
     return res.status(500).json({
       message: "Error retrieving crop monitoring",
       error: error.message
@@ -714,8 +863,6 @@ const getCropMonitoring = async (req, res) => {
   }
 };
 
-
-// Export controller functions
 module.exports = {
   createCrop,
   getMyCrops,

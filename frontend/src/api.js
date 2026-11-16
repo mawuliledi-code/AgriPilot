@@ -344,3 +344,99 @@ export async function getCropMonitoring(token, cropId) {
 
   return data;
 }
+
+// ===== Crop Health Observations =====
+
+// Load health observations for the dashboard.
+export async function getCropHealthDashboard(token) {
+  if (!token) {
+    throw new Error("Your session has expired. Please log in again.");
+  }
+
+  const response = await fetch(`${API_BASE_URL}/crop-health/dashboard`, {
+    method: "GET",
+    cache: "no-store",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+  });
+
+  return readResponse(response, "Could not load crop health observations");
+}
+
+// Add a health observation to a crop.
+export async function createHealthObservation(token, cropId, observationData) {
+  if (!token) {
+    throw new Error("Your session has expired. Please log in again.");
+  }
+
+  if (!cropId) {
+    throw new Error("A valid crop ID is required.");
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}/crop-health/${encodeURIComponent(cropId)}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      body: JSON.stringify(observationData),
+    }
+  );
+
+  return readResponse(response, "Could not save the health observation");
+}
+
+// Update an existing health observation.
+export async function updateHealthObservation(token, observationId, observationData) {
+  if (!token) {
+    throw new Error("Your session has expired. Please log in again.");
+  }
+
+  if (!observationId) {
+    throw new Error("A valid observation ID is required.");
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}/crop-health/observation/${encodeURIComponent(observationId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      body: JSON.stringify(observationData),
+    }
+  );
+
+  return readResponse(response, "Could not update the health observation");
+}
+
+// Load recommendations for a health observation.
+export async function getHealthRecommendations(token, observationId) {
+  if (!token) {
+    throw new Error("Your session has expired. Please log in again.");
+  }
+
+  if (!observationId) {
+    throw new Error("A valid observation ID is required.");
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}/crop-health/observation/${encodeURIComponent(observationId)}/recommendations`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    }
+  );
+
+  return readResponse(response, "Could not load health recommendations");
+}

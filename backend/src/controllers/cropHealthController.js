@@ -1,9 +1,54 @@
 
-const Crop = require("../models/Crop");
-const CropHealth = require("../models/CropHealth");
+const pool = require("../config/postgres");
 const generateCropHealthRecommendations = require("../utils/cropHealthRecommendations");
 
-// Record a new crop health observation
+const validId = (id) => /^\d+$/.test(String(id)) && Number(id) > 0;
+
+const formatObservation = (row) => ({
+  _id: row.observation_id,
+  crop: row.crop_id,
+  farmer: row.farmer_id,
+  observationType: row.observation_type,
+  name: row.name,
+  observationDate: row.observation_date,
+  severity: row.severity,
+  symptoms: row.symptoms,
+  notes: row.notes,
+  treatmentApplied: row.treatment_applied,
+  status: row.status,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+const getOwnedCrop = async (cropId, userId) => {
+  if (!validId(cropId)) return null;
+
+  const result = await pool.query(
+    `SELECT c.crop_id, c.crop_name, c.farm_id
+     FROM crops c
+     INNER JOIN farms f ON f.farm_id = c.farm_id
+     WHERE c.crop_id = $1 AND f.user_id = $2`,
+    [Number(cropId), userId]
+  );
+
+  return result.rows[0] || null;
+};
+
+const getOwnedObservation = async (observationId, userId) => {
+  if (!validId(observationId)) return null;
+
+  const result = await pool.query(
+    `SELECT o.*, c.crop_name
+     FROM crop_health_observations o
+     LEFT JOIN crops c ON c.crop_id = o.crop_id
+     WHERE o.observation_id = $1 AND o.farmer_id = $2`,
+    [Number(observationId), userId]
+  );
+
+  return result.rows[0] || null;
+};
+
+// Record a new crop health observation.
 const createHealthObservation = async (req, res) => {
   try {
     const {
@@ -49,7 +94,7 @@ const createHealthObservation = async (req, res) => {
       });
     }
 
-    const crop = await Crop.findById(req.params.cropId);
+    const crop = await getOwnedCrop(req.params.cropId, req.user.userId);
 
     if (!crop) {
       return res.status(404).json({
@@ -57,35 +102,34 @@ const createHealthObservation = async (req, res) => {
       });
     }
 
-    const cropFarm = await require("../models/Farm").findOne({
-      _id: crop.farm,
-      owner: req.user.userId,
-    });
-
-    if (!cropFarm) {
-      return res.status(403).json({
-        message: "You are not authorized to access this crop",
-      });
-    }
-
-    const observation = await CropHealth.create({
-      crop: crop._id,
-      farmer: req.user.userId,
-      observationType,
-      name,
-      observationDate,
-      severity,
-      symptoms,
-      notes,
-      treatmentApplied,
-      status,
-    });
+    const result = await pool.query(
+      `INSERT INTO crop_health_observations
+         (crop_id, farmer_id, observation_type, name,
+          observation_date, severity, symptoms, notes,
+          treatment_applied, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *`,
+      [
+        crop.crop_id,
+        req.user.userId,
+        observationType,
+        name,
+        observationDate || new Date(),
+        severity,
+        symptoms ?? null,
+        notes ?? null,
+        treatmentApplied ?? null,
+        status || "observed",
+      ]
+    );
 
     return res.status(201).json({
       message: "Crop health observation recorded successfully",
-      observation,
+      observation: formatObservation(result.rows[0]),
     });
   } catch (error) {
+    console.error("Create crop health observation error:", error);
+
     return res.status(500).json({
       message: "Error recording crop health observation",
       error: error.message,
@@ -93,10 +137,10 @@ const createHealthObservation = async (req, res) => {
   }
 };
 
-// Retrieve health observations for one crop
+// Retrieve health observations for one crop.
 const getCropHealthHistory = async (req, res) => {
   try {
-    const crop = await Crop.findById(req.params.cropId);
+    const crop = await getOwnedCrop(req.params.cropId, req.user.userId);
 
     if (!crop) {
       return res.status(404).json({
@@ -104,28 +148,24 @@ const getCropHealthHistory = async (req, res) => {
       });
     }
 
-    const cropFarm = await require("../models/Farm").findOne({
-      _id: crop.farm,
-      owner: req.user.userId,
-    });
+    const result = await pool.query(
+      `SELECT *
+       FROM crop_health_observations
+       WHERE crop_id = $1 AND farmer_id = $2
+       ORDER BY observation_date DESC`,
+      [crop.crop_id, req.user.userId]
+    );
 
-    if (!cropFarm) {
-      return res.status(403).json({
-        message: "You are not authorized to access this crop",
-      });
-    }
-
-    const observations = await CropHealth.find({
-      crop: crop._id,
-      farmer: req.user.userId,
-    }).sort({ observationDate: -1 });
+    const observations = result.rows.map(formatObservation);
 
     return res.status(200).json({
-      crop: crop.name,
+      crop: crop.crop_name,
       count: observations.length,
       observations,
     });
   } catch (error) {
+    console.error("Crop health history error:", error);
+
     return res.status(500).json({
       message: "Error retrieving crop health history",
       error: error.message,
@@ -133,15 +173,21 @@ const getCropHealthHistory = async (req, res) => {
   }
 };
 
-
+// Update an existing health observation.
 const updateHealthObservation = async (req, res) => {
   try {
-    const { severity, symptoms, notes, treatmentApplied, status } = req.body;
+    const {
+      severity,
+      symptoms,
+      notes,
+      treatmentApplied,
+      status,
+    } = req.body;
 
-    const observation = await CropHealth.findOne({
-      _id: req.params.observationId,
-      farmer: req.user.userId,
-    });
+    const observation = await getOwnedObservation(
+      req.params.observationId,
+      req.user.userId
+    );
 
     if (!observation) {
       return res.status(404).json({
@@ -172,21 +218,39 @@ const updateHealthObservation = async (req, res) => {
       });
     }
 
-    if (severity !== undefined) observation.severity = severity;
-    if (symptoms !== undefined) observation.symptoms = symptoms;
-    if (notes !== undefined) observation.notes = notes;
-    if (treatmentApplied !== undefined) {
-      observation.treatmentApplied = treatmentApplied;
-    }
-    if (status !== undefined) observation.status = status;
-
-    await observation.save();
+    const result = await pool.query(
+      `UPDATE crop_health_observations
+       SET severity = CASE WHEN $1::boolean THEN $2 ELSE severity END,
+           symptoms = CASE WHEN $3::boolean THEN $4 ELSE symptoms END,
+           notes = CASE WHEN $5::boolean THEN $6 ELSE notes END,
+           treatment_applied = CASE WHEN $7::boolean THEN $8 ELSE treatment_applied END,
+           status = CASE WHEN $9::boolean THEN $10 ELSE status END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE observation_id = $11 AND farmer_id = $12
+       RETURNING *`,
+      [
+        severity !== undefined,
+        severity ?? null,
+        symptoms !== undefined,
+        symptoms ?? null,
+        notes !== undefined,
+        notes ?? null,
+        treatmentApplied !== undefined,
+        treatmentApplied ?? null,
+        status !== undefined,
+        status ?? null,
+        observation.observation_id,
+        req.user.userId,
+      ]
+    );
 
     return res.status(200).json({
       message: "Crop health observation updated successfully",
-      observation,
+      observation: formatObservation(result.rows[0]),
     });
   } catch (error) {
+    console.error("Update crop health observation error:", error);
+
     return res.status(500).json({
       message: "Error updating crop health observation",
       error: error.message,
@@ -194,13 +258,13 @@ const updateHealthObservation = async (req, res) => {
   }
 };
 
-
+// Generate recommendations for one health observation.
 const getHealthRecommendations = async (req, res) => {
   try {
-    const observation = await CropHealth.findOne({
-      _id: req.params.observationId,
-      farmer: req.user.userId,
-    });
+    const observation = await getOwnedObservation(
+      req.params.observationId,
+      req.user.userId
+    );
 
     if (!observation) {
       return res.status(404).json({
@@ -208,16 +272,41 @@ const getHealthRecommendations = async (req, res) => {
       });
     }
 
-    const crop = await Crop.findById(observation.crop);
-
-    if (!crop) {
+    if (!observation.crop_id) {
       return res.status(404).json({
         message: "Crop not found",
       });
     }
 
+    const cropResult = await pool.query(
+      `SELECT *
+       FROM crops
+       WHERE crop_id = $1`,
+      [observation.crop_id]
+    );
+
+    if (cropResult.rows.length === 0) {
+      return res.status(404).json({
+        message: "Crop not found",
+      });
+    }
+
+    const cropRow = cropResult.rows[0];
+
+    const crop = {
+      _id: cropRow.crop_id,
+      name: cropRow.crop_name,
+      type: cropRow.crop_type,
+      plantingDate: cropRow.planting_date,
+      expectedHarvestDate: cropRow.expected_harvest_date,
+      status: cropRow.status,
+      growingPeriod: cropRow.growing_period,
+      commonPests: cropRow.common_pests,
+      commonDiseases: cropRow.common_diseases,
+    };
+
     const recommendation = generateCropHealthRecommendations(
-      observation
+      formatObservation(observation)
     );
 
     return res.status(200).json({
@@ -226,6 +315,8 @@ const getHealthRecommendations = async (req, res) => {
       recommendation,
     });
   } catch (error) {
+    console.error("Crop health recommendations error:", error);
+
     return res.status(500).json({
       message: "Error generating crop health recommendations",
       error: error.message,
@@ -233,41 +324,46 @@ const getHealthRecommendations = async (req, res) => {
   }
 };
 
-
+// Retrieve the crop health dashboard.
 const getCropHealthDashboard = async (req, res) => {
   try {
-    const CropHealth = require("../models/CropHealth");
+    const result = await pool.query(
+      `SELECT o.*, c.crop_name
+       FROM crop_health_observations o
+       LEFT JOIN crops c ON c.crop_id = o.crop_id
+       WHERE o.farmer_id = $1
+       ORDER BY o.observation_date DESC`,
+      [req.user.userId]
+    );
 
-    const observations = await CropHealth.find({
-      farmer: req.user.userId,
-    })
-      .populate("crop", "name")
-      .sort({ observationDate: -1 });
+    const observations = result.rows.map((row) => ({
+      ...formatObservation(row),
+      crop: row.crop_id
+        ? {
+            _id: row.crop_id,
+            name: row.crop_name,
+          }
+        : null,
+    }));
 
-    
-const summary = {
-  totalObservations: observations.length,
-
-  highSeverity: observations.filter(
-    (item) => item.severity === "high"
-  ).length,
-
-  mediumSeverity: observations.filter(
-    (item) => item.severity === "medium"
-  ).length,
-
-  lowSeverity: observations.filter(
-    (item) => item.severity === "low"
-  ).length,
-
-  treatmentApplied: observations.filter(
-    (item) => item.status === "treatment_applied"
-  ).length,
-
-  resolved: observations.filter(
-    (item) => item.status === "resolved"
-  ).length,
-};
+    const summary = {
+      totalObservations: observations.length,
+      highSeverity: observations.filter(
+        (item) => item.severity === "high"
+      ).length,
+      mediumSeverity: observations.filter(
+        (item) => item.severity === "medium"
+      ).length,
+      lowSeverity: observations.filter(
+        (item) => item.severity === "low"
+      ).length,
+      treatmentApplied: observations.filter(
+        (item) => item.status === "treatment_applied"
+      ).length,
+      resolved: observations.filter(
+        (item) => item.status === "resolved"
+      ).length,
+    };
 
     return res.status(200).json({
       message: "Crop health dashboard retrieved successfully",
