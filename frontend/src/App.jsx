@@ -2738,10 +2738,11 @@ function App() {
                                 <p className="error-message" role="alert">{healthError}</p>
                               )}
 
-                              <button type="submit" disabled={healthSaving}>
+                              <button className="health-save-button" type="submit" disabled={healthSaving}>
                                 {healthSaving ? "Saving..." : "Save Observation"}
                               </button>
                               <button
+                              classname="health-cancel-buttom"
                                 type="button"
                                 onClick={handleCancelHealthObservation}
                                 disabled={healthSaving}
