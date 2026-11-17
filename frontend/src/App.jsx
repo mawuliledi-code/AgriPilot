@@ -17,7 +17,6 @@ import {
   getCropHealthDashboard,
   createHealthObservation,
   updateHealthObservation,
-  getHealthRecommendations,
 } from "./api";
 import "./App.css";
 
@@ -120,6 +119,10 @@ function convertToArray(value) {
     .filter(Boolean);
 }
 
+function getTodayDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -165,7 +168,7 @@ function App() {
 
   // Crop health observations
   const [healthObservations, setHealthObservations] = useState([]);
-  const [healthLoading, setHealthLoading] = useState(false);
+  const [, setHealthLoading] = useState(false);
   const [healthError, setHealthError] = useState("");
   const [healthSaving, setHealthSaving] = useState(false);
 
@@ -190,28 +193,30 @@ function App() {
     .flatMap((crop) => {
       const alerts = [];
 
-      const pests = Array.isArray(crop.pests) ? crop.pests : [];
-      const diseases = Array.isArray(crop.diseases)
-        ? crop.diseases
-        : [];
+      const cropObservations = healthObservations.filter((observation) => {
+        const observationCropId =
+          observation.crop?._id ??
+          observation.crop?.id ??
+          observation.cropId ??
+          observation.crop;
 
-      // Combine pest and disease alerts into one card per crop
-      if (pests.length > 0 || diseases.length > 0) {
+        return String(observationCropId) === String(crop._id);
+      });
+
+      if (cropObservations.length > 0) {
         alerts.push({
           id: `${crop._id}-attention`,
           cropId: crop._id,
           cropName: crop.name,
-          plantingDate: crop.plantingDate, 
+          plantingDate: crop.plantingDate,
           issue: "Recorded issues",
           category: "attention",
-          details: [
-            ...pests.map((pest) => `Pest: ${pest}`),
-            ...diseases.map((disease) => `Disease: ${disease}`)
-          ]
+          details: cropObservations.map(
+            (observation) =>
+              `${observation.observationType}: ${observation.name}`
+          ),
         });
-      }
-      // No recorded pest or disease issues
-     if (pests.length === 0 && diseases.length === 0) {
+      } else {
         alerts.push({
           id: `${crop._id}-healthy`,
           cropId: crop._id,
@@ -221,7 +226,7 @@ function App() {
           category: "healthy",
           recommendedAction:
             "Continue routine crop monitoring to keep the crop healthy.",
-          details: []
+          details: [],
         });
       }
 
@@ -818,7 +823,7 @@ function App() {
     setEditingHealthObservationId(null);
     setHealthObservationType("pest");
     setHealthObservationName("");
-    setHealthObservationDate(new Date().toISOString().slice(0, 10));
+    setHealthObservationDate(getTodayDate());
     setHealthSeverity("medium");
     setHealthSymptoms("");
     setHealthNotes("");
@@ -926,7 +931,7 @@ function App() {
     setEditingHealthObservationId(null);
     setHealthObservationType("pest");
     setHealthObservationName("");
-    setHealthObservationDate(new Date().toISOString().slice(0, 10));
+    setHealthObservationDate(getTodayDate());
     setHealthSeverity("medium");
     setHealthSymptoms("");
     setHealthNotes("");
