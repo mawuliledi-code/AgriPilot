@@ -2,8 +2,8 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+const pool = require("./config/postgres");
 
-const connectDatabase = require("./config/database");
 const authRoutes = require("./routes/authRoutes");
 const cropRoutes = require("./routes/cropRoutes");
 const userRoutes = require("./routes/userRoutes");
@@ -32,20 +32,20 @@ app.use("/api/action-planner", cropActionPlannerRoutes);
 app.use("/api/action-completions", actionCompletionRoutes);
 app.use("/api/transactions", fertilizerTransactionRoutes);
 
-app.get("/", (req, res) => {
-    res.json({
-        message: "AgriPilot API is running"
-    });
-});
 
-const PORT = process.env.PORT || 5000;
-
+const PORT = process.env.PORT || 3000;
 const startServer = async () => {
-    await connectDatabase();
+    try {
+        await pool.query("SELECT 1");
+        console.log("PostgreSQL connected successfully");
 
-    app.listen(PORT, () => {
-        console.log(`AgriPilot server running on port ${PORT}`);
-    });
+        app.listen(PORT, () => {
+            console.log(`AgriPilot server running on port ${PORT}`);
+        });
+    } catch (error) {
+        console.error("PostgreSQL connection failed:", error.message);
+        process.exit(1);
+    }
 };
 
 startServer();
