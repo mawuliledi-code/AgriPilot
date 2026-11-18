@@ -1,75 +1,94 @@
-# AgriPilot – PostgreSQL Database Assessment
+# AgriPilot – PostgreSQL Database Documentation
 
 ## 1. Project Overview
 
-AgriPilot is an agricultural management system designed to help farmers manage farms, monitor crops, record care activities and organise recommended actions.
+AgriPilot is a web-based agricultural management system designed to help farmers manage farms, monitor crops, record crop health observations, access weather information and organise recommended agricultural actions.
 
-This database component uses PostgreSQL to demonstrate relational database design, SQL operations and database management concepts.
+The application uses **PostgreSQL as its primary relational database**. PostgreSQL is integrated with the Node.js and Express backend through the `pg` (node-postgres) library.
 
-**Important:** PostgreSQL is currently a separate assessment component. The existing AgriPilot application uses MongoDB. PostgreSQL integration with the running application is planned as a future development step.
+The database stores application information and maintains relationships between users, farms, crops, crop health observations and other agricultural records.
+
+This database component also demonstrates important relational database concepts, including database design, normalisation, SQL operations, relational algebra, indexing, transactions, functions, triggers and stored procedures.
 
 ## 2. Technologies Used
 
-- **PostgreSQL** – Relational database management system
-- **pgAdmin 4** – Database administration and SQL query tool
-- **SQL** – Database definition and manipulation language
-- **Visual Studio Code** – SQL documentation and project files
-- **Node.js and Express** – Existing AgriPilot backend
-- **React** – Existing AgriPilot frontend
-- **MongoDB** – Existing application database
+| Technology | Purpose |
+|---|---|
+| PostgreSQL | Primary relational database |
+| pg (node-postgres) | Connects the backend to PostgreSQL |
+| pgAdmin 4 | Database administration and SQL testing |
+| SQL | Database definition and manipulation |
+| Node.js | Backend runtime environment |
+| Express.js | Backend API framework |
+| React | Frontend user interface |
+| Visual Studio Code | Application and database development |
+| Git and GitHub | Version control |
 
 ## 3. Database Structure
 
-The PostgreSQL database is named `agripilot_db`.
+The PostgreSQL database used by the project is named `agripilot_db`.
 
-It contains six main tables:
+It contains related tables that support the application's main features.
+
+The main application entities include:
 
 | Table | Purpose |
 |---|---|
-| `users` | Stores farmer account information |
-| `farms` | Stores farms belonging to users |
-| `crops` | Stores crops belonging to farms |
-| `care_activities` | Records crop maintenance activities |
-| `recommended_actions` | Stores recommended farm and crop actions |
-| `action_completions` | Records completed recommended actions |
+| `users` | Stores user account information |
+| `farms` | Stores farms associated with users |
+| `crops` | Stores crops registered under farms |
+| `crop_health_observations` | Records pest, disease and other crop health observations |
+| `care_activities` | Stores agricultural maintenance activities |
+| `recommended_actions` | Stores recommended agricultural actions |
+| `farmer_action_completions` | Records completed recommended actions |
+| `action_status_log` | Maintains an audit history of action status changes |
+| `fertilizer_transactions` | Stores fertilizer-related transaction records |
+
+The database schema defines tables, primary keys, foreign keys and constraints to support data integrity and relationships between records.
+
+For the authoritative table definitions, refer to `schema.sql`.
 
 ## 4. Database Relationships
 
-The database contains the following relationships:
+The database uses primary keys and foreign keys to connect related records.
 
-- One user can own multiple farms.
+The main relationships include:
+
+- One user can have multiple farms.
 - One farm can contain multiple crops.
+- One crop can have multiple crop health observations.
 - One crop can have multiple care activities.
-- One farm can have multiple recommended actions.
-- A recommended action can optionally relate to a crop.
-- One recommended action can have multiple completion records.
+- Recommended actions can be associated with farms and crops.
+- Recommended actions can have associated completion records.
+- Action status changes can be recorded in an audit log.
 
-Primary keys uniquely identify records. Foreign keys connect related tables and help maintain referential integrity.
+These relationships help maintain referential integrity and organise agricultural information consistently.
 
-See `diagrams/er-diagram.md` for the Entity Relationship Diagram.
+Refer to the database schema and `diagrams/er-diagram.md` for the Entity Relationship Diagram.
 
 ## 5. Normalisation
 
-The database design separates users, farms, crops, care activities and actions into related tables.
+The database design separates related information into individual tables to reduce unnecessary duplication and improve data consistency.
 
-The normalisation documentation discusses:
+The database assessment demonstrates:
 
 - First Normal Form (1NF)
 - Second Normal Form (2NF)
 - Third Normal Form (3NF)
 
-The purpose of normalisation is to reduce unnecessary data duplication and improve data consistency.
+Normalisation helps minimise data duplication, reduce update anomalies and maintain reliable relationships between records.
 
-See `normalisation.sql` for the explanations and examples.
+Refer to `normalisation.sql` for the explanations and examples.
 
 ## 6. SQL Operations Demonstrated
 
-The project documents and demonstrates the following SQL operations:
+The database assessment demonstrates a range of SQL operations, including:
 
 - `CREATE TABLE`
 - `INSERT`
 - `SELECT`
 - `UPDATE`
+- `DELETE`
 - `WHERE`
 - `ORDER BY`
 - `LIMIT`
@@ -79,13 +98,15 @@ The project documents and demonstrates the following SQL operations:
 - `COUNT`, `SUM`, `AVG`, `MIN` and `MAX`
 - `UNION`
 
-See `queries.sql` and `relational-algebra.sql` for examples.
+These operations support database creation, data insertion, retrieval, modification and analysis.
+
+Refer to `queries.sql` and `relational-algebra.sql` for examples.
 
 ## 7. Indexing and Query Performance
 
-The project includes indexes on frequently used foreign-key and search columns to improve data retrieval.
+Indexes can improve data retrieval performance, particularly when queries frequently search or join records using specific columns.
 
-The following areas are indexed:
+The project includes indexing work covering areas such as:
 
 - Farm ownership
 - Crop-to-farm relationships
@@ -103,15 +124,17 @@ The query was tested before and after creating an index on `farm_id`.
 | Before indexing | Sequential Scan | 11.489 ms |
 | After indexing | Bitmap Index Scan and Bitmap Heap Scan | 5.571 ms |
 
-The observed execution time decreased in this test. Actual execution times can vary depending on database cache, system load and other conditions.
+The observed execution time decreased in this test. Actual performance can vary depending on database cache, system load, hardware and query conditions.
 
-Indexes can improve retrieval performance, although they also require storage and can add overhead to data modifications.
+Indexes can improve retrieval performance, although they also require storage and can introduce overhead during data modifications.
 
-See `indexes.sql` for the index definitions and performance experiment.
+Refer to `indexes.sql` for the index definitions and performance experiment.
 
-## 8. Transactions and ACID
+## 8. Transactions and ACID Properties
 
-The project demonstrates PostgreSQL transaction operations:
+PostgreSQL supports transactions to ensure that database operations are handled reliably.
+
+The database assessment demonstrates:
 
 - `BEGIN`
 - `COMMIT`
@@ -119,22 +142,24 @@ The project demonstrates PostgreSQL transaction operations:
 
 It also explains the four ACID properties:
 
-- **Atomicity** – A transaction is completed entirely or rolled back.
-- **Consistency** – A transaction maintains database rules and constraints.
-- **Isolation** – Concurrent transactions are controlled to prevent unwanted interference.
-- **Durability** – Committed changes are preserved.
+- **Atomicity:** A transaction is completed entirely or rolled back.
+- **Consistency:** Transactions maintain database rules and constraints.
+- **Isolation:** Concurrent transactions are controlled to prevent unwanted interference.
+- **Durability:** Committed changes are preserved.
 
-A transaction test was performed using a recommended action. The action status was updated and committed successfully. A separate rollback test confirmed that an uncommitted change could be reversed.
+Transaction examples demonstrate how database changes can be committed successfully or reversed using rollback.
 
-See `transactions.sql` for the examples and test documentation.
+Refer to `transactions.sql` for the examples and test documentation.
 
 ## 9. Advanced Database Features
 
-AgriPilot uses PostgreSQL functions, triggers and stored procedures to support database operations and maintain an audit history.
+The database assessment includes PostgreSQL functions, triggers and stored procedures to demonstrate database automation and audit logging.
 
-### 9.1 User-Defined Function
+### 9.1 User-Defined Functions
 
-The function `count_farm_crops(p_farm_id)` counts the number of crops registered under a particular farm.
+User-defined functions allow reusable database operations to be performed using SQL.
+
+The assessment includes the function `count_farm_crops(p_farm_id)`, which counts the number of crops registered under a particular farm.
 
 Example:
 
@@ -142,71 +167,77 @@ Example:
 SELECT count_farm_crops(1);
 ```
 
-**Test result:** The function returned `2`, confirming that farm 1 contains two crop records.
+The documented test returned `2` for farm 1 at the time of testing.
 
-### 9.2 Database Trigger
+### 9.2 Database Triggers
 
-The trigger `trg_action_completed` automatically records a status change when a recommended action becomes completed.
+Database triggers can automatically execute actions when specified database events occur.
 
-It stores:
+The assessment includes the trigger `trg_action_completed`, which records a status change when a recommended action becomes completed.
+
+The audit information includes:
 
 - Action ID
 - Previous status
 - New status
 - Date and time of the change
 
-The trigger writes this information into the `action_status_log` audit table.
+The trigger records this information in the `action_status_log` audit table.
 
-### 9.3 Stored Procedure
+### 9.3 Stored Procedures
 
-The procedure `complete_recommended_action(p_action_id)` changes a recommended action's status to `completed`.
+Stored procedures allow database operations to be organised into reusable routines.
+
+The assessment includes the procedure `complete_recommended_action(p_action_id)`, which changes a recommended action's status to `completed`.
 
 Example:
 
-sql
+```sql
 CALL complete_recommended_action(3);
+```
 
-
-The procedure was tested successfully using action ID 3.
+The documented test using action ID 3 completed successfully.
 
 ### 9.4 Testing Results
 
-| Feature | Test result |
+| Feature | Documented result |
 |---|---|
 | Crop-count function | Successful |
 | Stored procedure | Successful |
 | Status-change trigger | Successful |
 | Audit log | Successfully recorded |
 
-The audit log confirmed that action 3 changed from `pending` to `completed`.
+These database features demonstrate how PostgreSQL can automate operations and maintain an audit history.
 
-These features demonstrate how PostgreSQL can automate database operations and maintain a record of important changes in AgriPilot.
+Refer to `function-triggers.sql` for the implementation and test examples.
 
-See `functions-triggers.sql` for the implementation and test examples.
+## 10. Relationship with the AgriPilot Application
 
-## 10. Project Files
+PostgreSQL is the database used by the running AgriPilot application.
 
-The PostgreSQL assessment component is organised as follows:
+The application follows a client-server architecture:
 
-text
-database/
-├── schema.sql
-├── seed.sql
-├── queries.sql
-├── normalisation.sql
-├── relational-algebra.sql
-├── indexes.sql
-├── transactions.sql
-├── functions-triggers.sql
-├── README.md
-└── diagrams/
-    ├── system-architecture.md
-    └── er-diagram.md
+1. The React frontend sends requests to the Express backend.
+2. The backend processes requests and applies application logic.
+3. The backend communicates with PostgreSQL using the `pg` library.
+4. PostgreSQL stores and retrieves the requested application data.
+5. The backend returns responses to the frontend.
 
+The database supports the application's main functionality, including:
+
+- User authentication and account management
+- Farm management
+- Crop management
+- Crop health monitoring
+- Recommended agricultural actions
+- Action completion and history
+- Fertilizer transaction records
+
+This integration allows agricultural records to be stored persistently in a relational database.
 
 ## 11. Testing
 
-The SQL statements were tested using pgAdmin 4 and the `agripilot_db` database.
+Database testing was conducted using PostgreSQL and pgAdmin 4.
 
 Testing covered:
 
@@ -221,23 +252,65 @@ Testing covered:
 - Stored procedures
 - Database triggers and audit logging
 
-Successful execution messages and query results were used to verify the tested operations.
+Application testing also covered the use of PostgreSQL-backed features, including farm creation, crop registration, crop health observations, recommended actions and data persistence after refreshing and logging in again.
 
-## 12. Future Development
+## 12. Project Files
 
-Future development may include:
+The database component is organised as follows:
 
-- Connecting PostgreSQL to the Node.js backend using an ORM such as Prisma.
-- Integrating relational data into the React application.
-- Replacing or migrating selected MongoDB functionality.
-- Testing query performance with larger datasets.
-- Exploring database scaling and advanced transaction handling.
+```text
+database/
+├── schema.sql
+├── seed.sql
+├── queries.sql
+├── normalisation.sql
+├── relational-algebra.sql
+├── indexes.sql
+├── transactions.sql
+├── function-triggers.sql
+├── README.md
+└── diagrams/
+    ├── system-architecture.md
+    └── er-diagram.md
+```
 
-## 13. Conclusion
+The SQL files contain the database schema, sample data, queries and assessment examples.
 
-The AgriPilot PostgreSQL component provides a practical demonstration of relational database concepts through an agricultural management use case.
+## 13. Database Configuration
 
-It combines database design, SQL operations, normalisation, relational algebra, indexing, transactions, functions, triggers and stored procedures.
+The backend connects to PostgreSQL using environment variables.
 
-The project demonstrates how a relational database can organise agricultural information, maintain relationships between records, automate operations and preserve an audit history.
+The main configuration values include:
 
+```env
+PGHOST=localhost
+PGPORT=5432
+PGDATABASE=agripilot_db
+PGUSER=your_postgres_username
+PGPASSWORD=your_postgres_password
+```
+
+The PostgreSQL connection is configured in the backend through `backend/src/config/postgres.js`.
+
+Database credentials are kept in environment variables and should not be committed to GitHub.
+
+## 14. Future Development
+
+Future improvements may include:
+
+- Deploying the PostgreSQL database using a managed cloud database service.
+- Deploying the backend and frontend using Render.
+- Improving database query performance for larger datasets.
+- Expanding database reporting and analytics.
+- Improving production monitoring and backup procedures.
+- Extending agricultural data management and recommendation features.
+
+## 15. Conclusion
+
+AgriPilot uses PostgreSQL as its primary relational database to store and manage agricultural information.
+
+The database supports the application's farm management, crop management, crop health monitoring, recommended actions and transaction functionality.
+
+The project also demonstrates important database concepts through schema design, normalisation, SQL operations, relational algebra, indexing, transactions, functions, triggers and stored procedures.
+
+By integrating PostgreSQL with the Node.js and Express backend, AgriPilot provides a practical example of how relational database technology can support a digital agricultural management system.
