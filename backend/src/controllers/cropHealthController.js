@@ -1,6 +1,6 @@
 
 const pool = require("../config/postgres");
-const generateCropHealthRecommendations = require("../utils/cropHealthRecommendations");
+const generateCropHealthRecommendations = require("../utils/crophealthRecommendations");
 
 const validId = (id) => /^\d+$/.test(String(id)) && Number(id) > 0;
 
