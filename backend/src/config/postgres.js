@@ -1,6 +1,8 @@
 
 const { Pool } = require("pg");
 
+console.log("Backend PGUSER:", process.env.PGUSER);
+
 const postgresPool = new Pool({
     host: process.env.PGHOST,
     port: process.env.PGPORT || 5432,
