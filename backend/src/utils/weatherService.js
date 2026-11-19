@@ -1,126 +1,98 @@
 
 const getWeather = async (latitude, longitude) => {
-  // Validate farm coordinates
   if (
-    !Number.isFinite(latitude) ||
-    !Number.isFinite(longitude) ||
-    latitude < -90 ||
-    latitude > 90 ||
-    longitude < -180 ||
-    longitude > 180
+    !Number.isFinite(Number(latitude)) ||
+    !Number.isFinite(Number(longitude)) ||
+    Number(latitude) < -90 ||
+    Number(latitude) > 90 ||
+    Number(longitude) < -180 ||
+    Number(longitude) > 180
   ) {
     throw new Error("Valid latitude and longitude are required");
   }
 
-  // Prepare Open-Meteo request
-  const params = new URLSearchParams({
-    latitude: String(latitude),
-    longitude: String(longitude),
+  const apiKey = process.env.WEATHERAPI_KEY;
 
-    current:
-      "temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m",
-
-    hourly:
-      "temperature_2m,precipitation_probability,precipitation",
-
-    daily:
-      "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max",
-
-    forecast_days: "7",
-    timezone: "auto",
-  });
-
-  const url = `https://api.open-meteo.com/v1/forecast?${params}`;
-
-  // Retry temporary weather service errors
-  const maxAttempts = 3;
-  const retryDelays = [1000, 2000];
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      console.log(`Weather request attempt ${attempt}/${maxAttempts}`);
-
-      const response = await fetch(url, {
-        signal: AbortSignal.timeout(10000),
-      });
-
-      if (!response.ok) {
-        const errorDetails = await response.text();
-
-        console.error("Open-Meteo API Error:", {
-          status: response.status,
-          details: errorDetails,
-        });
-
-        // Retry temporary server or rate-limit errors
-        const temporaryErrors = [500, 502, 503, 504];
-
-        if (
-          temporaryErrors.includes(response.status) &&
-          attempt < maxAttempts
-        ) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, retryDelays[attempt - 1])
-          );
-
-          continue;
-        }
-
-        throw new Error(
-          `Weather service error (${response.status}): ${errorDetails}`
-        );
-      }
-
-      const data = await response.json();
-
-      return {
-        location: {
-          latitude: data.latitude,
-          longitude: data.longitude,
-          timezone: data.timezone,
-        },
-
-        current: data.current,
-        hourly: data.hourly,
-        daily: data.daily,
-
-        units: {
-          temperature: data.current_units.temperature_2m,
-          humidity: data.current_units.relative_humidity_2m,
-          precipitation: data.current_units.precipitation,
-          windSpeed: data.current_units.wind_speed_10m,
-        },
-      };
-
-    } catch (error) {
-      console.error(
-        `Weather request attempt ${attempt} failed:`,
-        error.message
-      );
-
-      if (attempt === maxAttempts) {
-        throw error;
-      }
-
-      // Retry network errors and timeouts
-      if (
-        error.name === "AbortError" ||
-        error.name === "TimeoutError" ||
-        error.name === "TypeError"
-      ) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, retryDelays[attempt - 1])
-        );
-
-        continue;
-      }
-
-      // Do not retry other permanent errors
-      throw error;
-    }
+  if (!apiKey) {
+    throw new Error("WEATHERAPI_KEY is not configured");
   }
 
-  throw new Error("Weather service is currently unavailable");
+  const params = new URLSearchParams({
+    key: apiKey,
+    q: `${Number(latitude)},${Number(longitude)}`,
+    days: "3",
+    aqi: "no",
+    alerts: "no",
+  });
+
+  const url = `https://api.weatherapi.com/v1/forecast.json?${params}`;
+
+  try {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!response.ok) {
+      const details = await response.text();
+      console.error("WeatherAPI error:", response.status, details);
+      throw new Error(`Weather service error (${response.status})`);
+    }
+
+    const data = await response.json();
+
+    const current = {
+      time: data.current.last_updated,
+      temperature_2m: data.current.temp_c,
+      relative_humidity_2m: data.current.humidity,
+      precipitation: data.current.precip_mm,
+      weather_code: data.current.condition.code,
+      wind_speed_10m: data.current.wind_kph,
+      condition: data.current.condition.text,
+    };
+
+    const hourly = data.forecast.forecastday.flatMap((day) =>
+      day.hour.map((hour) => ({
+        time: hour.time,
+        temperature_2m: hour.temp_c,
+        precipitation_probability: hour.chance_of_rain,
+        precipitation: hour.precip_mm,
+        weather_code: hour.condition.code,
+        condition: hour.condition.text,
+      }))
+    );
+
+    const daily = data.forecast.forecastday.map((day) => ({
+      time: day.date,
+      weather_code: day.day.condition.code,
+      temperature_2m_max: day.day.maxtemp_c,
+      temperature_2m_min: day.day.mintemp_c,
+      precipitation_sum: day.day.totalprecip_mm,
+      precipitation_probability_max: day.day.daily_chance_of_rain,
+      condition: day.day.condition.text,
+    }));
+
+    return {
+      location: {
+        latitude: data.location.lat,
+        longitude: data.location.lon,
+        timezone: data.location.tz_id,
+        name: data.location.name,
+        country: data.location.country,
+      },
+      current,
+      hourly,
+      daily,
+      units: {
+        temperature: "°C",
+        humidity: "%",
+        precipitation: "mm",
+        windSpeed: "km/h",
+      },
+    };
+  } catch (error) {
+    console.error("Weather service failed:", error.message);
+    throw error;
+  }
 };
 
 module.exports = getWeather;
