@@ -34,9 +34,18 @@ const getFarmWeather = async (req, res) => {
       });
     }
 
+    const latitude = Number(farm.latitude);
+const longitude = Number(farm.longitude);
+
     if (
-      !Number.isFinite(farm.latitude) ||
-      !Number.isFinite(farm.longitude)
+      farm.latitude === null ||
+      farm.longitude === null ||
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
     ) {
       return res.status(400).json({
         message:
