@@ -145,7 +145,7 @@ const createFarm = async (req, res) => {
                 city,
                 country,
                 farmLatitude,
-                farmLongitude,
+            farmLongitude,
                 JSON.stringify(Array.isArray(crops) ? crops : [])
             ]
         );
