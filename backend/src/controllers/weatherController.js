@@ -60,9 +60,9 @@ const longitude = Number(farm.longitude);
     try {
       // Try retrieving fresh weather data.
       weather = await getWeather(
-        farm.latitude,
-        farm.longitude
-      );
+          latitude,
+          longitude
+);
 
       weatherUpdatedAt = new Date();
 
