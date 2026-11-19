@@ -1,5 +1,5 @@
 
-const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:3000/api`;
+const API_BASE_URL = `${(import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:3000`).replace(/\/$/, "")}/api`;
 
 // Prevent duplicate simultaneous weather requests.
 const pendingWeatherRequests = new Map();
