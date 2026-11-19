@@ -1,6 +1,39 @@
 
 const pool = require("../config/postgres");
 
+// Find farm coordinates automatically using Open-Meteo.
+const getFarmCoordinates = async (city, country) => {
+    const url = new URL(
+        "https://geocoding-api.open-meteo.com/v1/search"
+    );
+
+    url.searchParams.set("name", city);
+    url.searchParams.set("count", "10");
+    url.searchParams.set("language", "en");
+    url.searchParams.set("format", "json");
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+        throw new Error("Location lookup service is unavailable");
+    }
+
+    const data = await response.json();
+
+    const match = data.results?.find(
+        place => place.country?.toLowerCase() === country.toLowerCase()
+    );
+
+    if (!match) {
+        return null;
+    }
+
+    return {
+        latitude: match.latitude,
+        longitude: match.longitude
+    };
+};
+
 // Convert a PostgreSQL farm row into the existing frontend response format.
 const formatFarm = (row) => {
     const locationParts = (row.location || "").split(",").map(part => part.trim());
@@ -81,6 +114,23 @@ const createFarm = async (req, res) => {
         const city = String(location.city).trim();
         const country = String(location.country).trim();
 
+        // Automatically find coordinates if the farmer did not provide them.
+        let farmLatitude = latitude ?? null;
+        let farmLongitude = longitude ?? null;
+
+        if (farmLatitude === null || farmLongitude === null) {
+            try {
+                const coordinates = await getFarmCoordinates(city, country);
+
+                if (coordinates) {
+                    farmLatitude = coordinates.latitude;
+                    farmLongitude = coordinates.longitude;
+                }
+            } catch (error) {
+                console.error("Farm geocoding error:", error.message);
+            }
+        }
+
         const result = await pool.query(
             `INSERT INTO farms
                 (user_id, farm_name, location, farm_size, city, country,
@@ -94,8 +144,8 @@ const createFarm = async (req, res) => {
                 Number(size),
                 city,
                 country,
-                latitude ?? null,
-                longitude ?? null,
+                farmLatitude,
+                farmLongitude,
                 JSON.stringify(Array.isArray(crops) ? crops : [])
             ]
         );
