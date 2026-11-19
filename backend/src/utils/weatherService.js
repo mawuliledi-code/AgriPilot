@@ -53,7 +53,7 @@ const getWeather = async (latitude, longitude) => {
         });
 
         // Retry temporary server or rate-limit errors
-        const temporaryErrors = [429, 500, 502, 503, 504];
+        const temporaryErrors = [500, 502, 503, 504];
 
         if (
           temporaryErrors.includes(response.status) &&
