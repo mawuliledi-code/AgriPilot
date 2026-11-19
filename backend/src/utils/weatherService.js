@@ -61,15 +61,20 @@ const getWeather = async (latitude, longitude) => {
       }))
     );
 
-    const daily = data.forecast.forecastday.map((day) => ({
-      time: day.date,
-      weather_code: day.day.condition.code,
-      temperature_2m_max: day.day.maxtemp_c,
-      temperature_2m_min: day.day.mintemp_c,
-      precipitation_sum: day.day.totalprecip_mm,
-      precipitation_probability_max: day.day.daily_chance_of_rain,
-      condition: day.day.condition.text,
-    }));
+   
+      const forecastDays = data.forecast.forecastday;
+
+      const daily = {
+        time: forecastDays.map((day) => day.date),
+        weather_code: forecastDays.map((day) => day.day.condition.code),
+        temperature_2m_max: forecastDays.map((day) => day.day.maxtemp_c),
+        temperature_2m_min: forecastDays.map((day) => day.day.mintemp_c),
+        precipitation_sum: forecastDays.map((day) => day.day.totalprecip_mm),
+        precipitation_probability_max: forecastDays.map(
+          (day) => day.day.daily_chance_of_rain
+        ),
+      };
+
 
     return {
       location: {
