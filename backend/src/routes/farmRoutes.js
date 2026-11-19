@@ -6,9 +6,9 @@ const protect = require("../middleware/authMiddleware");
 const {
   createFarm,
   getMyFarms,
-  deleteFarm
+  deleteFarm,
+  updateFarmCoordinates
 } = require("../controllers/farmController");
-
 const {
   getFarmHealth
 } = require("../controllers/farmHealthController");
@@ -23,6 +23,9 @@ router.get("/health", protect, getFarmHealth);
 
 // Create a new farm
 router.post("/", protect, createFarm);
+
+// Update coordinates for an existing farm
+router.patch("/:id/coordinates", protect, updateFarmCoordinates);
 
 // Delete a farm belonging to the logged-in farmer
 router.delete("/:id", protect, deleteFarm);

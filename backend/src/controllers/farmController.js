@@ -251,9 +251,67 @@ const deleteFarm = async (req, res) => {
     }
 };
 
+// Fetch and save coordinates for an existing farm.
+const updateFarmCoordinates = async (req, res) => {
+    try {
+        const farmId = Number(req.params.id);
+
+        if (!Number.isInteger(farmId) || farmId <= 0) {
+            return res.status(400).json({ message: "Invalid farm ID" });
+        }
+
+        const result = await pool.query(
+            `SELECT farm_id, city, country
+             FROM farms
+             WHERE farm_id = $1 AND user_id = $2`,
+            [farmId, req.user.userId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: "Farm not found" });
+        }
+
+        const { city, country } = result.rows[0];
+
+        const coordinates = await getFarmCoordinates(city, country);
+
+        if (!coordinates) {
+            return res.status(404).json({
+                message: "Could not find coordinates for this farm location"
+            });
+        }
+
+        const updatedFarm = await pool.query(
+            `UPDATE farms
+             SET latitude = $1,
+                 longitude = $2,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE farm_id = $3 AND user_id = $4
+             RETURNING *`,
+            [
+                coordinates.latitude,
+                coordinates.longitude,
+                farmId,
+                req.user.userId
+            ]
+        );
+
+        return res.status(200).json({
+            message: "Farm coordinates updated successfully",
+            farm: formatFarm(updatedFarm.rows[0])
+        });
+    } catch (error) {
+        console.error("Update farm coordinates error:", error.message);
+        return res.status(500).json({
+            message: "Failed to update farm coordinates"
+        });
+    }
+};
+
 module.exports = {
     createFarm,
     getMyFarms,
-    deleteFarm
+    deleteFarm,
+    updateFarmCoordinates
 };
 
